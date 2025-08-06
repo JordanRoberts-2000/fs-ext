@@ -18,6 +18,16 @@ pub fn create_file_or_dir(path: &Path) -> io::Result<()> {
     }
 }
 
+pub fn create_file_or_dir_strict(path: &Path) -> io::Result<()> {
+    match infer_path_type(path) {
+        InferredPathType::File => {
+            fs::File::create(path)?;
+            Ok(())
+        }
+        InferredPathType::Dir => fs::create_dir(path),
+    }
+}
+
 pub async fn create_file_or_dir_async(path: &Path) -> io::Result<()> {
     match infer_path_type(path) {
         InferredPathType::File => {
@@ -29,5 +39,15 @@ pub async fn create_file_or_dir_async(path: &Path) -> io::Result<()> {
             Ok(())
         }
         InferredPathType::Dir => t_fs::create_dir_all(path).await,
+    }
+}
+
+pub async fn create_file_or_dir_strict_async(path: &Path) -> io::Result<()> {
+    match infer_path_type(path) {
+        InferredPathType::File => {
+            t_fs::File::create(path).await?;
+            Ok(())
+        }
+        InferredPathType::Dir => t_fs::create_dir(path).await,
     }
 }
