@@ -21,26 +21,27 @@ where
         Ok(mut file) => {
             let content = content_fn();
             file.write_all(content.as_ref())?;
-            Ok(true)
+            Ok(true) // File created
         }
 
-        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => match fs::metadata(path) {
-            Ok(meta) if meta.is_file() => Ok(false),
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+            let meta = fs::metadata(path).map_err(|e| {
+                io::Error::new(e.kind(), format!("Failed to inspect '{}': {e}", path.display()))
+            })?;
 
-            Ok(meta) => Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!(
-                    "Path '{}' exists but is not a file (file type: {:?})",
-                    path.display(),
-                    meta.file_type()
-                ),
-            )),
+            if !meta.is_file() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!(
+                        "Path '{}' exists but is not a file (file type: {:?})",
+                        path.display(),
+                        meta.file_type()
+                    ),
+                ));
+            }
 
-            Err(e) => Err(io::Error::new(
-                e.kind(),
-                format!("Failed to inspect existing path '{}': {e}", path.display()),
-            )),
-        },
+            Ok(false) // File exists already
+        }
 
         Err(e) => Err(io::Error::new(
             e.kind(),
