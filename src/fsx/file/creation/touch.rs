@@ -1,40 +1,34 @@
-use std::{fs, io, path::Path, time::SystemTime};
+use {
+    filetime::FileTime,
+    std::{
+        fs::{File, OpenOptions},
+        io,
+        path::Path,
+        time::SystemTime,
+    },
+};
 
-pub fn touch(path: impl AsRef<Path>) -> io::Result<bool> {
+pub fn touch(path: impl AsRef<Path>) -> io::Result<File> {
     _touch(path.as_ref())
 }
 
-fn _touch(path: &Path) -> io::Result<bool> {
-    match fs::OpenOptions::new().write(true).create_new(true).open(path) {
-        Ok(_) => Ok(true), // File created
-
-        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-            let meta = fs::metadata(path).map_err(|e| {
-                io::Error::new(e.kind(), format!("Failed to inspect '{}': {e}", path.display()))
-            })?;
-
-            if !meta.is_file() {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!(
-                        "Path '{}' exists but is not a file (file type: {:?})",
-                        path.display(),
-                        meta.file_type()
-                    ),
-                ));
-            }
-
-            // Update modification time
-            let now = filetime::FileTime::from_system_time(SystemTime::now());
-            filetime::set_file_times(path, now, now)?;
-            Ok(false) // File exists already
-        }
-
-        Err(e) => Err(io::Error::new(
+fn _touch(path: &Path) -> io::Result<std::fs::File> {
+    let file = OpenOptions::new().write(true).create(true).open(path).map_err(|e| {
+        io::Error::new(
             e.kind(),
-            format!("Failed to open/create '{}': {e}", path.display()),
-        )),
-    }
+            format!("Failed to open or create file at '{}': {e}", path.display()),
+        )
+    })?;
+
+    let now = FileTime::from_system_time(SystemTime::now());
+    filetime::set_file_times(path, now, now).map_err(|e| {
+        io::Error::new(
+            e.kind(),
+            format!("Failed to update file atime & mtime for '{}': {e}", path.display()),
+        )
+    })?;
+
+    Ok(file)
 }
 
 #[cfg(test)]
@@ -54,15 +48,14 @@ mod tests {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("new.txt");
 
-        let created = touch(&file_path).unwrap();
-        assert!(created, "Expected touch to create a missing file");
+        let _file = touch(&file_path).unwrap();
 
         let meta = fs::metadata(&file_path).unwrap();
         assert!(meta.is_file(), "Expected a file to exist after touch");
     }
 
     #[test]
-    fn returns_false_and_updates_mtime_when_exists() {
+    fn updates_mtime_when_exists() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("exists.txt");
 
@@ -73,8 +66,7 @@ mod tests {
         // Many filesystems have ~1s mtime resolution; wait to avoid flakes
         sleep(Duration::from_millis(1100));
 
-        let created = touch(&file_path).unwrap();
-        assert!(!created, "Expected touch to return false when file already exists");
+        let _file = touch(&file_path).unwrap();
 
         let mtime_after =
             fs::metadata(&file_path).unwrap().modified().unwrap_or(SystemTime::UNIX_EPOCH);
@@ -101,13 +93,21 @@ mod tests {
     fn errors_if_path_is_directory() {
         let dir = tempdir().unwrap();
         let subdir_path = dir.path().join("a_dir");
-
         fs::create_dir(&subdir_path).unwrap();
 
         let result = touch(&subdir_path);
         assert!(result.is_err(), "Touch should error on a directory path");
 
-        let err = result.unwrap_err();
-        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+        // On Unix this is typically IsADirectory; on Windows often PermissionDenied.
+        let kind = result.unwrap_err().kind();
+        assert!(
+            matches!(
+                kind,
+                io::ErrorKind::IsADirectory
+                    | io::ErrorKind::PermissionDenied
+                    | io::ErrorKind::Other
+            ),
+            "Unexpected error kind for directory: {kind:?}"
+        );
     }
 }

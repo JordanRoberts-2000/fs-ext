@@ -1,68 +1,49 @@
 use {
     std::{io, path::Path},
-    tokio::fs,
+    tokio::fs::{File, OpenOptions},
 };
 
-pub async fn ensure(path: impl AsRef<Path>) -> io::Result<bool> {
+pub async fn ensure(path: impl AsRef<Path>) -> io::Result<File> {
     _ensure(path.as_ref()).await
 }
 
-async fn _ensure(path: &Path) -> io::Result<bool> {
-    match fs::OpenOptions::new().write(true).create_new(true).open(path).await {
-        Ok(_) => Ok(true),
-
-        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => match fs::metadata(path).await {
-            Ok(meta) if meta.is_file() => Ok(false),
-            Ok(meta) => Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!(
-                    "Path '{}' exists but is not a file (file type: {:?})",
-                    path.display(),
-                    meta.file_type()
-                ),
-            )),
-            Err(e) => Err(io::Error::new(
-                e.kind(),
-                format!("Failed to inspect existing path '{}': {e}", path.display()),
-            )),
-        },
-
-        Err(e) => Err(io::Error::new(
+pub async fn _ensure(path: &Path) -> io::Result<File> {
+    OpenOptions::new().write(true).create(true).open(path).await.map_err(|e| {
+        io::Error::new(
             e.kind(),
-            format!("Failed to create file at '{}': {e}", path.display()),
-        )),
-    }
+            format!("Failed to open or create file at '{}': {e}", path.display()),
+        )
+    })
 }
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::ensure,
-        std::{fs, io},
-        tempfile::tempdir,
-    };
+    use {super::ensure, std::io, tempfile::tempdir, tokio::fs};
 
     #[tokio::test]
     async fn creates_file_if_missing() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("new_file.txt");
 
-        let created = ensure(&file_path).await.unwrap();
+        let _file = ensure(&file_path).await.unwrap();
 
-        assert!(created, "File should be created");
-        assert!(file_path.exists());
-        assert!(file_path.is_file());
+        assert!(fs::try_exists(&file_path).await.unwrap(), "File should exist after ensure()");
+        let meta = fs::metadata(&file_path).await.unwrap();
+        assert!(meta.is_file(), "Path should be a file");
+        assert_eq!(meta.len(), 0, "Newly created file should be empty");
     }
 
     #[tokio::test]
-    async fn returns_false_if_file_already_exists() {
+    async fn succeeds_if_file_already_exists_and_preserves_contents() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("existing.txt");
 
-        fs::write(&file_path, "hello").unwrap();
-        let created = ensure(&file_path).await.unwrap();
+        fs::write(&file_path, b"hello").await.unwrap();
 
-        assert!(!created, "File already existed, should return false");
+        let _file = ensure(&file_path).await.unwrap();
+
+        let contents = fs::read(&file_path).await.unwrap();
+        assert_eq!(contents, b"hello", "ensure() must not alter existing contents");
     }
 
     #[tokio::test]
@@ -70,9 +51,20 @@ mod tests {
         let dir = tempdir().unwrap();
         let dir_path = dir.path().join("folder.ts");
 
-        fs::create_dir(&dir_path).unwrap();
+        fs::create_dir(&dir_path).await.unwrap();
+
         let err = ensure(&dir_path).await.unwrap_err();
 
-        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+        // Platform differences: IsADirectory (Unix), PermissionDenied (Windows), sometimes Other.
+        let kind = err.kind();
+        assert!(
+            matches!(
+                kind,
+                io::ErrorKind::IsADirectory
+                    | io::ErrorKind::PermissionDenied
+                    | io::ErrorKind::Other
+            ),
+            "Unexpected error kind for directory: {kind:?}"
+        );
     }
 }

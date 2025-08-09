@@ -1,9 +1,12 @@
 use {
     std::{io, path::Path},
-    tokio::{fs, io::AsyncWriteExt},
+    tokio::{
+        fs::{File, OpenOptions},
+        io::AsyncWriteExt,
+    },
 };
 
-pub async fn ensure_or_init_with<F, C>(path: impl AsRef<Path>, content_fn: F) -> io::Result<bool>
+pub async fn ensure_or_init_with<F, C>(path: impl AsRef<Path>, content_fn: F) -> io::Result<File>
 where
     F: FnOnce() -> C,
     C: AsRef<[u8]>,
@@ -11,39 +14,35 @@ where
     _ensure_or_init_with(path.as_ref(), content_fn).await
 }
 
-async fn _ensure_or_init_with<F, C>(path: &Path, content_fn: F) -> io::Result<bool>
+async fn _ensure_or_init_with<F, C>(path: &Path, content_fn: F) -> io::Result<File>
 where
     F: FnOnce() -> C,
     C: AsRef<[u8]>,
 {
-    match fs::OpenOptions::new().write(true).create_new(true).open(path).await {
-        Ok(mut file) => {
+    match OpenOptions::new().write(true).open(path).await {
+        Ok(file) => Ok(file),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            let mut file =
+                OpenOptions::new().write(true).create(true).open(path).await.map_err(|e| {
+                    io::Error::new(
+                        e.kind(),
+                        format!("Failed to create file at '{}': {e}", path.display()),
+                    )
+                })?;
+
             let content = content_fn();
-            file.write_all(content.as_ref()).await?;
-            Ok(true)
+            file.write_all(content.as_ref()).await.map_err(|e| {
+                io::Error::new(
+                    e.kind(),
+                    format!("Failed to write to file at '{}': {e}", path.display()),
+                )
+            })?;
+
+            Ok(file)
         }
-
-        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => match fs::metadata(path).await {
-            Ok(meta) if meta.is_file() => Ok(false),
-
-            Ok(meta) => Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!(
-                    "Path '{}' exists but is not a file (file type: {:?})",
-                    path.display(),
-                    meta.file_type()
-                ),
-            )),
-
-            Err(e) => Err(io::Error::new(
-                e.kind(),
-                format!("Failed to inspect existing path '{}': {e}", path.display()),
-            )),
-        },
-
         Err(e) => Err(io::Error::new(
             e.kind(),
-            format!("Failed to create file at '{}': {e}", path.display()),
+            format!("Failed to open file at '{}': {e}", path.display()),
         )),
     }
 }
@@ -57,25 +56,27 @@ mod tests {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("new.txt");
 
-        let created = ensure_or_init_with(&file_path, || "from closure").await.unwrap();
-        assert!(created);
+        let _file = ensure_or_init_with(&file_path, || "from closure").await.unwrap();
 
+        assert!(
+            fs::try_exists(&file_path).await.unwrap(),
+            "File should exist after ensure_or_init_with()"
+        );
         let contents = fs::read_to_string(&file_path).await.unwrap();
         assert_eq!(contents, "from closure");
     }
 
     #[tokio::test]
-    async fn returns_false_if_file_already_exists() {
+    async fn opens_existing_file_without_overwriting() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("existing.txt");
 
         fs::write(&file_path, "original").await.unwrap();
 
-        let created = ensure_or_init_with(&file_path, || "should not overwrite").await.unwrap();
-        assert!(!created);
+        let _file = ensure_or_init_with(&file_path, || "should not overwrite").await.unwrap();
 
         let contents = fs::read_to_string(&file_path).await.unwrap();
-        assert_eq!(contents, "original");
+        assert_eq!(contents, "original", "Existing file content must remain unchanged");
     }
 
     #[tokio::test]
@@ -86,10 +87,19 @@ mod tests {
         fs::create_dir(&subdir_path).await.unwrap();
 
         let result = ensure_or_init_with(&subdir_path, || "data").await;
-        assert!(result.is_err());
+        assert!(result.is_err(), "Expected error when path is a directory");
 
-        let err = result.unwrap_err();
-        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+        // Platform differences: IsADirectory on Unix, PermissionDenied on Windows, occasionally Other.
+        let kind = result.unwrap_err().kind();
+        assert!(
+            matches!(
+                kind,
+                io::ErrorKind::IsADirectory
+                    | io::ErrorKind::PermissionDenied
+                    | io::ErrorKind::Other
+            ),
+            "Unexpected error kind for directory: {kind:?}"
+        );
     }
 
     #[tokio::test]
@@ -97,9 +107,9 @@ mod tests {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("bin");
 
-        let created = ensure_or_init_with(&file_path, || vec![1u8, 2, 3]).await.unwrap();
-        assert!(created);
+        let _file = ensure_or_init_with(&file_path, || vec![1u8, 2, 3]).await.unwrap();
 
+        assert!(fs::try_exists(&file_path).await.unwrap(), "File should exist");
         let data = fs::read(&file_path).await.unwrap();
         assert_eq!(data, vec![1u8, 2, 3]);
     }
@@ -109,9 +119,9 @@ mod tests {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("string.txt");
 
-        let created = ensure_or_init_with(&file_path, || String::from("Hello")).await.unwrap();
-        assert!(created);
+        let _file = ensure_or_init_with(&file_path, || String::from("Hello")).await.unwrap();
 
+        assert!(fs::try_exists(&file_path).await.unwrap(), "File should exist");
         let content = fs::read_to_string(&file_path).await.unwrap();
         assert_eq!(content, "Hello");
     }
