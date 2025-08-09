@@ -7,7 +7,7 @@ pub async fn ensure(path: impl AsRef<Path>) -> io::Result<File> {
     _ensure(path.as_ref()).await
 }
 
-pub async fn _ensure(path: &Path) -> io::Result<File> {
+async fn _ensure(path: &Path) -> io::Result<File> {
     OpenOptions::new().write(true).create(true).open(path).await.map_err(|e| {
         io::Error::new(
             e.kind(),
