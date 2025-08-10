@@ -1,13 +1,18 @@
-use std::{fs, io, path::Path};
+use {
+    std::{io, path::Path},
+    tokio::fs,
+};
 
-pub fn read_string_or_init_with<F, C>(path: impl AsRef<Path>, contents_fn: F) -> io::Result<String>
+pub async fn read_string_or_init_with<F, C>(
+    path: impl AsRef<Path>, contents_fn: F,
+) -> io::Result<String>
 where
     F: FnOnce() -> C,
     C: AsRef<[u8]>,
 {
     let path = path.as_ref();
 
-    match fs::read_to_string(path) {
+    match fs::read_to_string(path).await {
         Ok(content) => Ok(content),
 
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
@@ -22,7 +27,7 @@ where
                     )
                 })?;
 
-            fs::write(path, bytes).map_err(|e| {
+            fs::write(path, bytes).await.map_err(|e| {
                 io::Error::new(
                     e.kind(),
                     format!("Failed to write default content to '{}': {e}", path.display()),
@@ -44,47 +49,48 @@ mod tests {
     use {
         super::read_string_or_init_with,
         std::{
-            fs, io,
+            io,
             sync::atomic::{AtomicU32, Ordering},
         },
         tempfile::tempdir,
+        tokio::fs,
     };
 
-    #[test]
-    fn returns_existing_content() {
+    #[tokio::test]
+    async fn returns_existing_content() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("existing.txt");
-        fs::write(&file, "existing content").unwrap();
+        fs::write(&file, "existing content").await.unwrap();
 
-        let out = read_string_or_init_with(&file, || "default content").unwrap();
+        let out = read_string_or_init_with(&file, || "default content").await.unwrap();
 
         assert_eq!(out, "existing content");
-        // Verify file content unchanged
-        assert_eq!(fs::read_to_string(&file).unwrap(), "existing content");
+        assert_eq!(fs::read_to_string(&file).await.unwrap(), "existing content");
     }
 
-    #[test]
-    fn creates_and_returns_default_when_missing() {
+    #[tokio::test]
+    async fn creates_and_returns_default_when_missing() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("missing.txt");
 
-        let out = read_string_or_init_with(&file, || "default content").unwrap();
+        let out = read_string_or_init_with(&file, || "default content").await.unwrap();
 
         assert_eq!(out, "default content");
-        assert_eq!(fs::read_to_string(&file).unwrap(), "default content");
+        assert_eq!(fs::read_to_string(&file).await.unwrap(), "default content");
     }
 
-    #[test]
-    fn closure_not_called_when_file_exists() {
+    #[tokio::test]
+    async fn closure_not_called_when_file_exists() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("exists.txt");
-        fs::write(&file, "original").unwrap();
+        fs::write(&file, "original").await.unwrap();
 
         let call_count = AtomicU32::new(0);
         let out = read_string_or_init_with(&file, || {
             call_count.fetch_add(1, Ordering::SeqCst);
             "should not be used"
         })
+        .await
         .unwrap();
 
         assert_eq!(out, "original");
@@ -95,8 +101,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn closure_called_when_file_missing() {
+    #[tokio::test]
+    async fn closure_called_when_file_missing() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("missing.txt");
 
@@ -105,30 +111,34 @@ mod tests {
             call_count.fetch_add(1, Ordering::SeqCst);
             "generated content"
         })
+        .await
         .unwrap();
 
         assert_eq!(out, "generated content");
         assert_eq!(call_count.load(Ordering::SeqCst), 1, "Closure should be called exactly once");
     }
 
-    #[test]
-    fn error_when_existing_file_not_utf8() {
+    #[tokio::test]
+    async fn error_when_existing_file_not_utf8() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("invalid_utf8.bin");
-        fs::write(&file, [0xFF, 0xFE, 0xFD]).unwrap();
+        fs::write(&file, [0xFF, 0xFE, 0xFD]).await.unwrap();
 
-        let err = read_string_or_init_with(&file, || "default").unwrap_err();
+        let err = read_string_or_init_with(&file, || "default").await.unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::InvalidData);
     }
 
-    #[test]
-    fn error_when_default_content_not_utf8() {
+    #[tokio::test]
+    async fn error_when_default_content_not_utf8() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("missing.txt");
 
-        let err = read_string_or_init_with(&file, || vec![0xFF, 0xFE, 0xFD]).unwrap_err();
+        let err = read_string_or_init_with(&file, || vec![0xFF, 0xFE, 0xFD]).await.unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::InvalidData);
 
-        assert!(!file.exists(), "File should not be created when default content is invalid UTF-8");
+        assert!(
+            !fs::try_exists(&file).await.unwrap(),
+            "File should not be created when default content is invalid UTF-8"
+        );
     }
 }
