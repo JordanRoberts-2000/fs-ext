@@ -12,3 +12,49 @@ fn _assert_readable(path: &Path) -> io::Result<()> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::assert_readable,
+        std::{fs, io},
+        tempfile::tempdir,
+    };
+
+    #[test]
+    fn ok_when_file_is_readable() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("file.txt");
+        fs::write(&file_path, "hello").unwrap();
+
+        let res = assert_readable(&file_path);
+        assert!(res.is_ok(), "expected Ok(()), got {res:?}");
+    }
+
+    #[test]
+    fn err_when_file_missing() {
+        let dir = tempdir().unwrap();
+        let missing = dir.path().join("nope.txt");
+
+        let err = assert_readable(&missing).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::NotFound);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn err_when_file_not_readable() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("locked.txt");
+        fs::write(&file_path, "secret").unwrap();
+
+        // Remove all read/write/execute permissions
+        let mut perms = fs::metadata(&file_path).unwrap().permissions();
+        perms.set_mode(0o000);
+        fs::set_permissions(&file_path, perms).unwrap();
+
+        let err = assert_readable(&file_path).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::PermissionDenied);
+    }
+}
