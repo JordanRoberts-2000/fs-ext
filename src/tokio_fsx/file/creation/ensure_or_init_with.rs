@@ -11,14 +11,15 @@ where
     F: FnOnce() -> C,
     C: AsRef<[u8]>,
 {
-    let content = content_fn();
-    _ensure_or_init_with(path.as_ref(), content.as_ref()).await
-}
+    let path = path.as_ref();
 
-async fn _ensure_or_init_with(path: &Path, content: &[u8]) -> io::Result<File> {
     match OpenOptions::new().write(true).open(path).await {
         Ok(file) => Ok(file),
+
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            let content = content_fn();
+            let bytes = content.as_ref();
+
             let mut file =
                 OpenOptions::new().write(true).create(true).open(path).await.map_err(|e| {
                     io::Error::new(
@@ -27,7 +28,7 @@ async fn _ensure_or_init_with(path: &Path, content: &[u8]) -> io::Result<File> {
                     )
                 })?;
 
-            file.write_all(content).await.map_err(|e| {
+            file.write_all(bytes).await.map_err(|e| {
                 io::Error::new(
                     e.kind(),
                     format!("Failed to write to file at '{}': {e}", path.display()),
@@ -36,6 +37,7 @@ async fn _ensure_or_init_with(path: &Path, content: &[u8]) -> io::Result<File> {
 
             Ok(file)
         }
+
         Err(e) => Err(io::Error::new(
             e.kind(),
             format!("Failed to open file at '{}': {e}", path.display()),
@@ -45,7 +47,15 @@ async fn _ensure_or_init_with(path: &Path, content: &[u8]) -> io::Result<File> {
 
 #[cfg(test)]
 mod tests {
-    use {super::ensure_or_init_with, std::io, tempfile::tempdir, tokio::fs};
+    use {
+        super::ensure_or_init_with,
+        std::{
+            io,
+            sync::atomic::{AtomicU32, Ordering},
+        },
+        tempfile::tempdir,
+        tokio::fs,
+    };
 
     #[tokio::test]
     async fn creates_file_and_writes_closure_content() {
@@ -120,5 +130,43 @@ mod tests {
         assert!(fs::try_exists(&file_path).await.unwrap(), "File should exist");
         let content = fs::read_to_string(&file_path).await.unwrap();
         assert_eq!(content, "Hello");
+    }
+
+    #[tokio::test]
+    async fn closure_not_called_when_file_exists() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("exists.txt");
+        fs::write(&file_path, "original").await.unwrap();
+
+        let call_count = AtomicU32::new(0);
+        let _ = ensure_or_init_with(&file_path, || {
+            call_count.fetch_add(1, Ordering::SeqCst);
+            "unused"
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(
+            call_count.load(Ordering::SeqCst),
+            0,
+            "Closure should not be called when file exists"
+        );
+    }
+
+    #[tokio::test]
+    async fn closure_called_once_when_file_missing() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("missing.txt");
+
+        let call_count = AtomicU32::new(0);
+        let _ = ensure_or_init_with(&file_path, || {
+            call_count.fetch_add(1, Ordering::SeqCst);
+            "generated content"
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(call_count.load(Ordering::SeqCst), 1, "Closure should be called exactly once");
+        assert_eq!(fs::read_to_string(&file_path).await.unwrap(), "generated content");
     }
 }

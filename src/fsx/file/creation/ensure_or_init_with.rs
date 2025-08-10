@@ -9,28 +9,32 @@ where
     F: FnOnce() -> C,
     C: AsRef<[u8]>,
 {
-    let content = content_fn();
-    _ensure_or_init_with(path.as_ref(), content.as_ref())
-}
+    let path = path.as_ref();
 
-fn _ensure_or_init_with(path: &Path, content: &[u8]) -> io::Result<File> {
     match OpenOptions::new().write(true).open(path) {
         Ok(file) => Ok(file),
+
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            let content = content_fn();
+            let bytes = content.as_ref();
+
             let mut file = OpenOptions::new().write(true).create(true).open(path).map_err(|e| {
                 io::Error::new(
                     e.kind(),
                     format!("Failed to create file at '{}': {e}", path.display()),
                 )
             })?;
-            file.write_all(content).map_err(|e| {
+
+            file.write_all(bytes).map_err(|e| {
                 io::Error::new(
                     e.kind(),
                     format!("Failed to write to file at '{}': {e}", path.display()),
                 )
             })?;
+
             Ok(file)
         }
+
         Err(e) => Err(io::Error::new(
             e.kind(),
             format!("Failed to open file at '{}': {e}", path.display()),
@@ -42,7 +46,10 @@ fn _ensure_or_init_with(path: &Path, content: &[u8]) -> io::Result<File> {
 mod tests {
     use {
         super::ensure_or_init_with,
-        std::{fs, io},
+        std::{
+            fs, io,
+            sync::atomic::{AtomicU32, Ordering},
+        },
         tempfile::tempdir,
     };
 
@@ -116,5 +123,41 @@ mod tests {
         assert!(file_path.exists(), "File should exist");
         let content = fs::read_to_string(&file_path).unwrap();
         assert_eq!(content, "Hello");
+    }
+
+    #[test]
+    fn closure_not_called_when_file_exists() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("exists.txt");
+        fs::write(&file_path, "original").unwrap();
+
+        let call_count = AtomicU32::new(0);
+        let _ = ensure_or_init_with(&file_path, || {
+            call_count.fetch_add(1, Ordering::SeqCst);
+            "unused"
+        })
+        .unwrap();
+
+        assert_eq!(
+            call_count.load(Ordering::SeqCst),
+            0,
+            "Closure should not be called when file exists"
+        );
+    }
+
+    #[test]
+    fn closure_called_once_when_file_missing() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("missing.txt");
+
+        let call_count = AtomicU32::new(0);
+        let _ = ensure_or_init_with(&file_path, || {
+            call_count.fetch_add(1, Ordering::SeqCst);
+            "generated content"
+        })
+        .unwrap();
+
+        assert_eq!(call_count.load(Ordering::SeqCst), 1, "Closure should be called exactly once");
+        assert_eq!(fs::read_to_string(&file_path).unwrap(), "generated content");
     }
 }
