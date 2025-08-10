@@ -9,14 +9,11 @@ where
     F: FnOnce() -> C,
     C: AsRef<[u8]>,
 {
-    _ensure_or_init_with(path.as_ref(), content_fn)
+    let content = content_fn();
+    _ensure_or_init_with(path.as_ref(), content.as_ref())
 }
 
-fn _ensure_or_init_with<F, C>(path: &Path, content_fn: F) -> io::Result<File>
-where
-    F: FnOnce() -> C,
-    C: AsRef<[u8]>,
-{
+fn _ensure_or_init_with(path: &Path, content: &[u8]) -> io::Result<File> {
     match OpenOptions::new().write(true).open(path) {
         Ok(file) => Ok(file),
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
@@ -26,15 +23,12 @@ where
                     format!("Failed to create file at '{}': {e}", path.display()),
                 )
             })?;
-
-            let content = content_fn();
-            file.write_all(content.as_ref()).map_err(|e| {
+            file.write_all(content).map_err(|e| {
                 io::Error::new(
                     e.kind(),
                     format!("Failed to write to file at '{}': {e}", path.display()),
                 )
             })?;
-
             Ok(file)
         }
         Err(e) => Err(io::Error::new(
