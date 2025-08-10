@@ -12,3 +12,30 @@ fn _last_modified(path: &Path) -> io::Result<SystemTime> {
         )
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::last_modified,
+        std::{fs, io},
+        tempfile::tempdir,
+    };
+
+    #[test]
+    fn returns_time_for_existing_file() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("file.txt");
+        fs::write(&file, "hello").unwrap();
+
+        last_modified(&file).unwrap();
+    }
+
+    #[test]
+    fn err_for_missing_path() {
+        let dir = tempdir().unwrap();
+        let missing = dir.path().join("nope.txt");
+
+        let err = last_modified(&missing).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::NotFound);
+    }
+}

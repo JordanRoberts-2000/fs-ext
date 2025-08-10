@@ -1,3 +1,4 @@
+mod checks;
 mod creation;
 
-pub use creation::*;
+pub use {checks::*, creation::*};

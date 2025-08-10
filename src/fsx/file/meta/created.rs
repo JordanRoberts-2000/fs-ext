@@ -12,3 +12,30 @@ fn _created(path: &Path) -> io::Result<SystemTime> {
         )
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::created,
+        std::{fs, io},
+        tempfile::tempdir,
+    };
+
+    #[test]
+    fn returns_creation_time_for_existing_file() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("file.txt");
+        fs::write(&file_path, "hello").unwrap();
+
+        created(&file_path).unwrap();
+    }
+
+    #[test]
+    fn returns_error_for_missing_file() {
+        let dir = tempdir().unwrap();
+        let missing = dir.path().join("nope.txt");
+
+        let err = created(&missing).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::NotFound);
+    }
+}
