@@ -58,7 +58,7 @@ impl TempFile {
         Ok((File::from_std(file), path))
     }
 
-    pub async fn extract(&mut self, src: impl AsRef<Path> + Send) -> io::Result<()> {
+    pub async fn copy(&mut self, src: impl AsRef<Path> + Send) -> io::Result<()> {
         let mut source = File::open(src.as_ref()).await?;
         let mut tmp = self.as_file().await?;
 
@@ -190,7 +190,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn extract_copies_source_and_truncates_temp() -> io::Result<()> {
+    async fn copy_copies_source_and_truncates_temp() -> io::Result<()> {
         let dir = tempdir()?;
         let src = dir.path().join("src.txt");
         fs::write(&src, b"hello").await?;
@@ -203,7 +203,7 @@ mod tests {
             tf.flush().await?;
         }
 
-        t.extract(&src).await?;
+        t.copy(&src).await?;
 
         let bytes = fs::read(t.path()).await?;
         assert_eq!(bytes.as_slice(), b"hello");
@@ -211,13 +211,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn extract_then_append_requires_seek_to_end() -> io::Result<()> {
+    async fn copy_then_append_requires_seek_to_end() -> io::Result<()> {
         let dir = tempdir()?;
         let src = dir.path().join("src.txt");
         fs::write(&src, b"base").await?;
 
         let mut t = TempFile::in_dir(dir.path()).await?;
-        t.extract(&src).await?;
+        t.copy(&src).await?;
 
         let mut tf = t.as_file().await?;
         tf.seek(std::io::SeekFrom::End(0)).await?;
@@ -230,12 +230,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn extract_errors_when_source_missing() {
+    async fn copy_errors_when_source_missing() {
         let dir = tempdir().unwrap();
         let missing = dir.path().join("nope.txt");
 
         let mut t = TempFile::in_dir(dir.path()).await.unwrap();
-        let err = t.extract(&missing).await.unwrap_err();
+        let err = t.copy(&missing).await.unwrap_err();
 
         assert_eq!(err.kind(), io::ErrorKind::NotFound);
     }
