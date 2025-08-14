@@ -1,7 +1,7 @@
 use {
     std::{
         fs::File,
-        io,
+        io::{self, Seek, SeekFrom},
         path::{Path, PathBuf},
     },
     tempfile::{Builder, NamedTempFile},
@@ -31,12 +31,31 @@ impl TempFile {
         self.0.path()
     }
 
+    pub fn persist_new(self, path: impl AsRef<Path>) -> io::Result<File> {
+        self.0.persist_noclobber(path).map_err(|e| e.error)
+    }
+
     pub fn persist(self, path: impl AsRef<Path>) -> io::Result<File> {
         self.0.persist(path).map_err(|e| e.error)
     }
 
     pub fn keep(self) -> io::Result<(File, PathBuf)> {
         self.0.keep().map_err(|e| e.error)
+    }
+
+    pub fn extract(&mut self, path: impl AsRef<Path>) -> io::Result<()> {
+        let mut source = File::open(path.as_ref())?;
+        let tmp = self.as_file_mut();
+
+        // Truncate the temp file
+        tmp.set_len(0)?;
+        tmp.seek(SeekFrom::Start(0))?;
+
+        io::copy(&mut source, tmp)?;
+
+        tmp.sync_all()?;
+
+        Ok(())
     }
 }
 
@@ -121,5 +140,47 @@ mod tests {
         fs::write(&not_a_dir, "x").unwrap();
 
         TempFile::in_dir(&not_a_dir).expect_err("in_dir should fail when given a file path");
+    }
+
+    #[test]
+    fn extract_copies_source_and_truncates_temp() -> io::Result<()> {
+        let dir = tempdir()?;
+        let src = dir.path().join("src.txt");
+
+        fs::write(&src, b"hello")?;
+
+        let mut t = TempFile::in_dir(dir.path())?;
+        t.as_file_mut().write_all(b"AAAAAAAAAAAA")?;
+
+        t.extract(&src)?;
+
+        assert_eq!(fs::read(t.path())?, b"hello");
+        Ok(())
+    }
+
+    #[test]
+    fn extract_leaves_cursor_at_end_allowing_append() -> io::Result<()> {
+        let dir = tempdir()?;
+        let src = dir.path().join("src.txt");
+        fs::write(&src, b"base")?;
+
+        let mut t = TempFile::in_dir(dir.path())?;
+        t.extract(&src)?;
+
+        t.as_file_mut().write_all(b"+more")?;
+
+        assert_eq!(fs::read(t.path())?, b"base+more");
+        Ok(())
+    }
+
+    #[test]
+    fn extract_errors_when_source_missing() {
+        let dir = tempdir().unwrap();
+        let missing = dir.path().join("nope.txt");
+
+        let mut t = TempFile::in_dir(dir.path()).unwrap();
+        let err = t.extract(&missing).unwrap_err();
+
+        assert_eq!(err.kind(), io::ErrorKind::NotFound);
     }
 }

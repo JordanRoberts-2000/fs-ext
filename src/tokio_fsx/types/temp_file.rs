@@ -1,10 +1,10 @@
 use {
     std::{
-        io,
+        io::{self, SeekFrom},
         path::{Path, PathBuf},
     },
     tempfile::{Builder, NamedTempFile},
-    tokio::{fs::File, task},
+    tokio::{fs::File, io::AsyncSeekExt, task},
 };
 
 #[derive(Debug)]
@@ -43,10 +43,33 @@ impl TempFile {
         Ok(File::from_std(file))
     }
 
+    pub async fn persist_new(self, path: impl AsRef<Path> + Send) -> io::Result<File> {
+        let path = path.as_ref().to_path_buf();
+        let file =
+            task::spawn_blocking(move || self.0.persist_noclobber(&path).map_err(|e| e.error))
+                .await
+                .map_err(join_err)??;
+        Ok(File::from_std(file))
+    }
+
     pub async fn keep(self) -> io::Result<(File, PathBuf)> {
         let (file, path) =
             task::spawn_blocking(move || self.0.keep()).await.map_err(join_err)??;
         Ok((File::from_std(file), path))
+    }
+
+    pub async fn extract(&mut self, src: impl AsRef<Path> + Send) -> io::Result<()> {
+        let mut source = File::open(src.as_ref()).await?;
+        let mut tmp = self.as_file().await?;
+
+        tmp.set_len(0).await?;
+        tmp.seek(SeekFrom::Start(0)).await?;
+
+        tokio::io::copy(&mut source, &mut tmp).await?;
+
+        tmp.sync_all().await?;
+
+        Ok(())
     }
 }
 
@@ -164,5 +187,56 @@ mod tests {
         std::fs::write(&not_a_dir, "x").unwrap();
 
         TempFile::in_dir(&not_a_dir).await.expect_err("in_dir should fail when given a file path");
+    }
+
+    #[tokio::test]
+    async fn extract_copies_source_and_truncates_temp() -> io::Result<()> {
+        let dir = tempdir()?;
+        let src = dir.path().join("src.txt");
+        fs::write(&src, b"hello").await?;
+
+        let mut t = TempFile::in_dir(dir.path()).await?;
+
+        {
+            let mut tf = t.as_file().await?;
+            tf.write_all(b"AAAAAAAAAAAA").await?;
+            tf.flush().await?;
+        }
+
+        t.extract(&src).await?;
+
+        let bytes = fs::read(t.path()).await?;
+        assert_eq!(bytes.as_slice(), b"hello");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn extract_then_append_requires_seek_to_end() -> io::Result<()> {
+        let dir = tempdir()?;
+        let src = dir.path().join("src.txt");
+        fs::write(&src, b"base").await?;
+
+        let mut t = TempFile::in_dir(dir.path()).await?;
+        t.extract(&src).await?;
+
+        let mut tf = t.as_file().await?;
+        tf.seek(std::io::SeekFrom::End(0)).await?;
+        tf.write_all(b"+more").await?;
+        tf.flush().await?;
+
+        let bytes = fs::read(t.path()).await?;
+        assert_eq!(bytes.as_slice(), b"base+more");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn extract_errors_when_source_missing() {
+        let dir = tempdir().unwrap();
+        let missing = dir.path().join("nope.txt");
+
+        let mut t = TempFile::in_dir(dir.path()).await.unwrap();
+        let err = t.extract(&missing).await.unwrap_err();
+
+        assert_eq!(err.kind(), io::ErrorKind::NotFound);
     }
 }
