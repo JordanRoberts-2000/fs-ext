@@ -26,7 +26,7 @@ impl TempFile {
         Ok(Self(t))
     }
 
-    pub async fn as_file(&self) -> io::Result<File> {
+    pub fn as_file(&self) -> io::Result<File> {
         let file = self.0.as_file().try_clone()?;
         Ok(File::from_std(file))
     }
@@ -60,7 +60,7 @@ impl TempFile {
 
     pub async fn copy(&mut self, src: impl AsRef<Path> + Send) -> io::Result<()> {
         let mut source = File::open(src.as_ref()).await?;
-        let mut tmp = self.as_file().await?;
+        let mut tmp = self.as_file()?;
 
         tmp.set_len(0).await?;
         tmp.seek(SeekFrom::Start(0)).await?;
@@ -139,7 +139,7 @@ mod tests {
         let dest = dir.path().join("data.txt");
 
         let t = TempFile::in_dir(dir.path()).await?;
-        let mut tf = t.as_file().await?;
+        let mut tf = t.as_file()?;
         tf.write_all(b"hello").await?;
         tf.flush().await?;
         drop(tf);
@@ -156,7 +156,7 @@ mod tests {
         fs::write(&dest, b"old").await?;
 
         let t = TempFile::in_dir(dir.path()).await?;
-        let mut tf = t.as_file().await?;
+        let mut tf = t.as_file()?;
         tf.write_all(b"new").await?;
         tf.flush().await?;
         drop(tf);
@@ -169,7 +169,7 @@ mod tests {
     #[tokio::test]
     async fn write_then_read_from_tempfile() -> io::Result<()> {
         let t = TempFile::new().await?;
-        let mut f = t.as_file().await?;
+        let mut f = t.as_file()?;
         f.write_all(b"abc").await?;
         f.flush().await?;
         // Rewind before reading
@@ -198,7 +198,7 @@ mod tests {
         let mut t = TempFile::in_dir(dir.path()).await?;
 
         {
-            let mut tf = t.as_file().await?;
+            let mut tf = t.as_file()?;
             tf.write_all(b"AAAAAAAAAAAA").await?;
             tf.flush().await?;
         }
@@ -219,7 +219,7 @@ mod tests {
         let mut t = TempFile::in_dir(dir.path()).await?;
         t.copy(&src).await?;
 
-        let mut tf = t.as_file().await?;
+        let mut tf = t.as_file()?;
         tf.seek(std::io::SeekFrom::End(0)).await?;
         tf.write_all(b"+more").await?;
         tf.flush().await?;

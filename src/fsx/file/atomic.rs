@@ -3,7 +3,7 @@ use {
     std::{fs::File, io, path::Path},
 };
 
-pub fn create<F>(path: impl AsRef<Path>, write_fn: F) -> io::Result<()>
+pub fn create_new<F>(path: impl AsRef<Path>, write_fn: F) -> io::Result<()>
 where
     F: FnOnce(&mut File) -> io::Result<()>,
 {
@@ -72,13 +72,13 @@ mod tests {
         let dir = tempdir()?;
         let dst = dir.path().join("fresh.txt");
 
-        create(&dst, |f| {
+        create_new(&dst, |f| {
             f.write_all(b"hello, world")?;
             Ok(())
         })?;
         assert_eq!(fs::read_to_string(&dst)?, "hello, world");
 
-        let err = create(&dst, |_f| Ok(())).unwrap_err();
+        let err = create_new(&dst, |_f| Ok(())).unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
 
         Ok(())

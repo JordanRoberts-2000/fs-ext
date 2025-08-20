@@ -1,3 +1,4 @@
+pub mod atomic;
 mod checks;
 mod creation;
 pub mod meta;
