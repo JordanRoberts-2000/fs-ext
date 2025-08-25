@@ -1,6 +1,6 @@
 use {std::path::Path, tokio::fs};
 
-pub async fn is_writable(path: &Path) -> bool {
+pub async fn is_writable(path: impl AsRef<Path>) -> bool {
     fs::OpenOptions::new().write(true).open(path).await.is_ok()
 }
 

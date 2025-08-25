@@ -1,6 +1,6 @@
 use {std::path::Path, tokio::fs};
 
-pub async fn is_readable(path: &Path) -> bool {
+pub async fn is_readable(path: impl AsRef<Path>) -> bool {
     fs::File::open(path).await.is_ok()
 }
 

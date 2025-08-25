@@ -1,6 +1,6 @@
 use std::{fs, path::Path};
 
-pub fn is_writable(path: &Path) -> bool {
+pub fn is_writable(path: impl AsRef<Path>) -> bool {
     fs::OpenOptions::new().write(true).open(path).is_ok()
 }
 

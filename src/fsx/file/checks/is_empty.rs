@@ -3,7 +3,7 @@ use {
     std::{io, path::Path},
 };
 
-pub fn is_empty(path: &Path) -> io::Result<bool> {
+pub fn is_empty(path: impl AsRef<Path>) -> io::Result<bool> {
     Ok(fsx::file::size(path)? == 0)
 }
 
