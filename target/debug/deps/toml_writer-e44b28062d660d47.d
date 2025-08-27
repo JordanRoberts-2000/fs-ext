@@ -1,0 +1,10 @@
+/Users/jordanroberts/Documents/portfolio/fs-ext/target/debug/deps/toml_writer-e44b28062d660d47.d: /Users/jordanroberts/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.0.2/src/lib.rs /Users/jordanroberts/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.0.2/src/integer.rs /Users/jordanroberts/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.0.2/src/key.rs /Users/jordanroberts/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.0.2/src/string.rs /Users/jordanroberts/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.0.2/src/value.rs /Users/jordanroberts/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.0.2/src/write.rs
+
+/Users/jordanroberts/Documents/portfolio/fs-ext/target/debug/deps/libtoml_writer-e44b28062d660d47.rmeta: /Users/jordanroberts/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.0.2/src/lib.rs /Users/jordanroberts/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.0.2/src/integer.rs /Users/jordanroberts/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.0.2/src/key.rs /Users/jordanroberts/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.0.2/src/string.rs /Users/jordanroberts/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.0.2/src/value.rs /Users/jordanroberts/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.0.2/src/write.rs
+
+/Users/jordanroberts/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.0.2/src/lib.rs:
+/Users/jordanroberts/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.0.2/src/integer.rs:
+/Users/jordanroberts/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.0.2/src/key.rs:
+/Users/jordanroberts/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.0.2/src/string.rs:
+/Users/jordanroberts/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.0.2/src/value.rs:
+/Users/jordanroberts/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml_writer-1.0.2/src/write.rs:
