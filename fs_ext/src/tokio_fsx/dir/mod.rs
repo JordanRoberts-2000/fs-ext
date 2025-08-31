@@ -1,5 +1,7 @@
+mod checks;
 mod creation;
 mod query;
 mod temp;
+mod utils;
 
-pub use {creation::*, query::*, temp::*};
+pub use {checks::*, creation::*, query::*, temp::*, utils::*};
