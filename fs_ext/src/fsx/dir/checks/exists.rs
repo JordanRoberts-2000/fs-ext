@@ -17,3 +17,29 @@ fn _exists(path: &Path) -> io::Result<bool> {
         Err(e) => Err(e).with_path_context("Failed to access", path),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::*,
+        std::{fs, io},
+        tempfile::tempdir,
+    };
+
+    #[test]
+    fn returns_false_for_missing_path() {
+        let d = tempdir().unwrap();
+        let missing = d.path().join("does_not_exist");
+        let res = exists(&missing).unwrap();
+        assert!(!res, "missing path should return Ok(false)");
+    }
+
+    #[test]
+    fn returns_false_for_file() -> io::Result<()> {
+        let d = tempdir()?;
+        let f = d.path().join("file.txt");
+        fs::write(&f, "x")?;
+        assert_eq!(exists(&f)?, false, "file should return Ok(false)");
+        Ok(())
+    }
+}
