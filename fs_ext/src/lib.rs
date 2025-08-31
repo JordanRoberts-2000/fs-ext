@@ -4,6 +4,7 @@ pub mod fsx;
 pub(crate) mod test_utils;
 mod tokio_fsx;
 mod traits;
+pub(crate) mod utils;
 
 pub mod tokio {
     pub mod fsx {
