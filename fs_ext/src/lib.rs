@@ -1,6 +1,7 @@
 mod error;
 pub mod formats;
 pub mod fsx;
+mod macros;
 pub(crate) mod test_utils;
 mod tokio_fsx;
 mod traits;

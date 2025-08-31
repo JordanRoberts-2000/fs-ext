@@ -7,9 +7,8 @@ use {
     std::{io, path::Path},
 };
 
-pub fn save_auto<T, F>(path: impl AsRef<Path>, model: &T) -> Result<(), CodecError>
+pub fn save_auto<T>(path: impl AsRef<Path>, model: &T) -> Result<(), CodecError>
 where
-    F: Format,
     T: Serialize,
 {
     let path = path.as_ref();

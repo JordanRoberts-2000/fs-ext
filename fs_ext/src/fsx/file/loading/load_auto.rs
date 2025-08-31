@@ -7,9 +7,8 @@ use {
     std::{io, path::Path},
 };
 
-pub fn load_auto<T, F>(path: impl AsRef<Path>) -> Result<T, CodecError>
+pub fn load_auto<T>(path: impl AsRef<Path>) -> Result<T, CodecError>
 where
-    F: Format,
     T: DeserializeOwned,
 {
     let path = path.as_ref();

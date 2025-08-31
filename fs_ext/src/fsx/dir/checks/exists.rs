@@ -1,11 +1,9 @@
-#[cfg(test)]
-use fs_ext_test_macros::fs_test;
 use {
     crate::IoResultExt,
     std::{fs, io, path::Path},
 };
 
-#[cfg_attr(test, fs_test(existing_dir_ok))]
+#[cfg_attr(test, fs_ext_test_macros::fs_test(existing_dir_ok))]
 pub fn exists(path: impl AsRef<Path>) -> io::Result<bool> {
     _exists(path.as_ref())
 }
