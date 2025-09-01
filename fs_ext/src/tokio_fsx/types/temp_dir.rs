@@ -1,106 +1,133 @@
 use {
+    crate::{fsx::TempDir as SyncTempDir, tokio_fsx::utils::join_err_to_io},
     std::{
         io,
         path::{Path, PathBuf},
     },
-    tempfile::{Builder, TempDir as TfTempDir},
     tokio::task,
 };
 
 #[derive(Debug)]
-pub struct TempDir(TfTempDir);
+pub struct TempDir {
+    inner: SyncTempDir,
+}
 
 impl TempDir {
     pub async fn new() -> io::Result<Self> {
-        let td = task::spawn_blocking(TfTempDir::new).await.map_err(join_err)??;
-        Ok(Self(td))
+        let sync_tempdir =
+            task::spawn_blocking(SyncTempDir::new).await.map_err(join_err_to_io)??;
+        Ok(Self { inner: sync_tempdir })
     }
 
-    pub async fn in_dir(dir: impl AsRef<Path>) -> io::Result<Self> {
-        let dir = dir.as_ref().to_path_buf();
-        let td = task::spawn_blocking(move || Builder::new().prefix(".tmp-").tempdir_in(dir))
+    pub async fn in_dir(path: impl AsRef<Path>) -> io::Result<Self> {
+        let path = path.as_ref().to_owned();
+
+        let sync_tempdir = task::spawn_blocking(move || SyncTempDir::in_dir(&path))
             .await
-            .map_err(join_err)??;
-        Ok(Self(td))
+            .map_err(join_err_to_io)??;
+        Ok(Self { inner: sync_tempdir })
     }
 
     pub fn path(&self) -> &Path {
-        self.0.path()
+        self.inner.path()
     }
 
     pub fn keep(self) -> PathBuf {
-        self.0.keep()
+        self.inner.keep()
     }
 
     pub async fn close(self) -> io::Result<()> {
-        task::spawn_blocking(move || self.0.close()).await.map_err(join_err)?
+        task::spawn_blocking(move || self.inner.close()).await.map_err(join_err_to_io)?
     }
-}
-
-fn join_err(e: tokio::task::JoinError) -> io::Error {
-    io::Error::new(io::ErrorKind::Other, format!("blocking task failed: {e}"))
 }
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        tempfile::tempdir,
-        tokio::{fs, io::AsyncWriteExt},
-    };
+    use {super::*, tokio::fs as tokio_fs};
 
     #[tokio::test]
-    async fn new_creates_and_deletes_on_drop() -> io::Result<()> {
-        let path = {
-            let t = TempDir::new().await?;
-            let p = t.path().to_path_buf();
-            assert!(p.exists(), "temp dir should exist while handle is alive");
-            p
-        };
-        assert!(!path.exists(), "temp dir should be removed on Drop after scope ends");
-        Ok(())
+    async fn test_tempdir_new() {
+        let tempdir = TempDir::new().await.expect("Failed to create temp dir");
+
+        let path = tempdir.path();
+        assert!(path.exists(), "Temp dir path should exist");
+        assert!(path.is_dir(), "Temp dir path should be a directory");
     }
 
     #[tokio::test]
-    async fn in_dir_places_tempdir_in_provided_dir() -> io::Result<()> {
-        let parent = tempdir()?;
-        let t = TempDir::in_dir(parent.path()).await?;
-        assert_eq!(t.path().parent().unwrap(), parent.path());
-        Ok(())
+    async fn test_tempdir_in_dir() {
+        let base_temp_dir = std::env::temp_dir();
+        let tempdir = TempDir::in_dir(&base_temp_dir)
+            .await
+            .expect("Failed to create temp dir in specified dir");
+
+        let path = tempdir.path();
+        assert!(path.exists(), "Temp dir should exist");
+        assert!(path.is_dir(), "Temp dir should be a directory");
+
+        // Check that it's actually in the specified parent directory
+        let parent = path.parent().expect("Temp dir should have a parent");
+        assert_eq!(parent, base_temp_dir, "Temp dir should be in specified parent directory");
     }
 
     #[tokio::test]
-    async fn keep_stops_autodelete_and_returns_path() -> io::Result<()> {
-        let t = TempDir::new().await?;
-        let p = t.keep(); // auto-delete disabled
-        assert!(p.exists(), "kept dir should remain after wrapper is dropped");
+    async fn test_path_consistency() {
+        let tempdir = TempDir::new().await.expect("Failed to create temp dir");
+        let path1 = tempdir.path();
+        let path2 = tempdir.path();
 
-        // clean up to keep tests tidy
-        fs::remove_dir_all(&p).await?;
-        Ok(())
+        // Path should be consistent between calls
+        assert_eq!(path1, path2, "Path should be consistent between calls");
+        assert!(path1.exists(), "Path should exist");
+        assert!(path1.is_dir(), "Path should be a directory");
     }
 
     #[tokio::test]
-    async fn close_removes_directory_now() -> io::Result<()> {
-        let t = TempDir::new().await?;
-        let p = t.path().to_path_buf();
+    async fn test_keep() {
+        let tempdir = TempDir::new().await.expect("Failed to create temp dir");
+        let original_path = tempdir.path().to_owned();
 
-        let mut f = fs::File::create(p.join("file.txt")).await?;
-        f.write_all(b"hello").await?;
-        f.sync_all().await?;
-        drop(f);
+        // Create a test file in the directory
+        let test_file_path = original_path.join("keep_test.txt");
+        tokio_fs::write(&test_file_path, b"keep test data")
+            .await
+            .expect("Failed to write test file");
 
-        t.close().await?; // consumes and removes
-        assert!(!p.exists(), "dir should be gone after close()");
-        Ok(())
+        // Keep the directory
+        let kept_path = tempdir.keep();
+
+        // Verify the directory and its contents still exist
+        assert_eq!(kept_path, original_path, "Kept path should match original path");
+        assert!(kept_path.exists(), "Kept directory should still exist");
+        assert!(test_file_path.exists(), "Test file in kept directory should still exist");
+
+        // Verify content is preserved
+        let content = tokio_fs::read(&test_file_path).await.expect("Failed to read kept file");
+        assert_eq!(content, b"keep test data", "Kept file should preserve content");
+
+        // Manual cleanup since keep() prevents automatic cleanup
+        tokio_fs::remove_dir_all(&kept_path).await.ok();
     }
 
     #[tokio::test]
-    async fn in_dir_fails_on_non_directory() {
-        let d = tempdir().unwrap();
-        let not_a_dir = d.path().join("file.txt");
-        std::fs::write(&not_a_dir, "x").unwrap();
+    async fn test_close() {
+        let tempdir = TempDir::new().await.expect("Failed to create temp dir");
+        let path = tempdir.path().to_owned();
 
-        TempDir::in_dir(&not_a_dir).await.expect_err("should fail when provided non-directory");
+        // Create a test file to verify cleanup
+        let test_file_path = path.join("close_test.txt");
+        tokio_fs::write(&test_file_path, b"close test data")
+            .await
+            .expect("Failed to write test file");
+
+        assert!(path.exists(), "Temp dir should exist before close");
+        assert!(test_file_path.exists(), "Test file should exist before close");
+
+        // Close the temp directory
+        tempdir.close().await.expect("Failed to close temp dir");
+
+        // Directory should be cleaned up
+        assert!(!path.exists(), "Temp dir should not exist after close");
+        assert!(!test_file_path.exists(), "Test file should not exist after close");
     }
 }

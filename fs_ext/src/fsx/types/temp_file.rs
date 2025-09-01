@@ -8,7 +8,7 @@ use {
 };
 
 #[derive(Debug)]
-pub struct TempFile(NamedTempFile);
+pub struct TempFile(pub(crate) NamedTempFile);
 
 impl TempFile {
     pub fn new() -> io::Result<Self> {
@@ -43,7 +43,7 @@ impl TempFile {
         self.0.keep().map_err(|e| e.error)
     }
 
-    pub fn copy(&mut self, path: impl AsRef<Path>) -> io::Result<()> {
+    pub fn copy_from(&mut self, path: impl AsRef<Path>) -> io::Result<()> {
         let mut source = File::open(path.as_ref())?;
         let tmp = self.as_file_mut();
 
@@ -152,7 +152,7 @@ mod tests {
         let mut t = TempFile::in_dir(dir.path())?;
         t.as_file_mut().write_all(b"AAAAAAAAAAAA")?;
 
-        t.copy(&src)?;
+        t.copy_from(&src)?;
 
         assert_eq!(fs::read(t.path())?, b"hello");
         Ok(())
@@ -165,7 +165,7 @@ mod tests {
         fs::write(&src, b"base")?;
 
         let mut t = TempFile::in_dir(dir.path())?;
-        t.copy(&src)?;
+        t.copy_from(&src)?;
 
         t.as_file_mut().write_all(b"+more")?;
 
@@ -179,7 +179,7 @@ mod tests {
         let missing = dir.path().join("nope.txt");
 
         let mut t = TempFile::in_dir(dir.path()).unwrap();
-        let err = t.copy(&missing).unwrap_err();
+        let err = t.copy_from(&missing).unwrap_err();
 
         assert_eq!(err.kind(), io::ErrorKind::NotFound);
     }

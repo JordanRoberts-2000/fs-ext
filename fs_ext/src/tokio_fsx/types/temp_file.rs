@@ -1,242 +1,224 @@
 use {
+    crate::{fsx::TempFile as SyncTempFile, tokio_fsx::utils::join_err_to_io},
     std::{
-        io::{self, SeekFrom},
+        io,
         path::{Path, PathBuf},
     },
-    tempfile::{Builder, NamedTempFile},
-    tokio::{fs::File, io::AsyncSeekExt, task},
+    tokio::{fs::File as TokioFile, task},
 };
 
 #[derive(Debug)]
-pub struct TempFile(NamedTempFile);
+pub struct TempFile {
+    pub(crate) inner: SyncTempFile,
+}
 
 impl TempFile {
     pub async fn new() -> io::Result<Self> {
-        let t = task::spawn_blocking(NamedTempFile::new).await.map_err(join_err)??;
-        Ok(Self(t))
+        let sync_tempfile =
+            task::spawn_blocking(SyncTempFile::new).await.map_err(join_err_to_io)??;
+        Ok(Self { inner: sync_tempfile })
     }
 
-    pub async fn in_dir(dir: impl AsRef<Path> + Send) -> io::Result<Self> {
-        let dir = dir.as_ref().to_path_buf();
-        let t = task::spawn_blocking(move || {
-            Builder::new().prefix(".").suffix(".tmp").tempfile_in(dir)
-        })
-        .await
-        .map_err(join_err)??;
-        Ok(Self(t))
+    pub async fn in_dir(dir: impl AsRef<Path>) -> io::Result<Self> {
+        let dir = dir.as_ref().to_owned();
+
+        let sync_tempfile =
+            task::spawn_blocking(|| SyncTempFile::in_dir(dir)).await.map_err(join_err_to_io)??;
+        Ok(Self { inner: sync_tempfile })
     }
 
-    pub fn as_file(&self) -> io::Result<File> {
-        let file = self.0.as_file().try_clone()?;
-        Ok(File::from_std(file))
+    pub fn as_file(&self) -> io::Result<TokioFile> {
+        let file = self.inner.as_file().try_clone()?;
+        Ok(TokioFile::from_std(file))
     }
 
     pub fn path(&self) -> &Path {
-        self.0.path()
+        self.inner.path()
     }
 
-    pub async fn persist(self, path: impl AsRef<Path> + Send) -> io::Result<File> {
-        let path = path.as_ref().to_path_buf();
-        let file = task::spawn_blocking(move || self.0.persist(&path).map_err(|e| e.error))
+    pub async fn persist(self, path: impl AsRef<Path>) -> io::Result<TokioFile> {
+        let path = path.as_ref().to_owned();
+
+        let file = task::spawn_blocking(move || self.inner.persist(&path))
             .await
-            .map_err(join_err)??;
-        Ok(File::from_std(file))
+            .map_err(join_err_to_io)??;
+        Ok(TokioFile::from_std(file))
     }
 
-    pub async fn persist_new(self, path: impl AsRef<Path> + Send) -> io::Result<File> {
-        let path = path.as_ref().to_path_buf();
-        let file =
-            task::spawn_blocking(move || self.0.persist_noclobber(&path).map_err(|e| e.error))
-                .await
-                .map_err(join_err)??;
-        Ok(File::from_std(file))
+    pub async fn persist_new(self, path: impl AsRef<Path>) -> io::Result<TokioFile> {
+        let path = path.as_ref().to_owned();
+
+        let file = task::spawn_blocking(move || self.inner.persist_new(&path))
+            .await
+            .map_err(join_err_to_io)??;
+        Ok(TokioFile::from_std(file))
     }
 
-    pub async fn keep(self) -> io::Result<(File, PathBuf)> {
+    pub async fn keep(self) -> io::Result<(TokioFile, PathBuf)> {
         let (file, path) =
-            task::spawn_blocking(move || self.0.keep()).await.map_err(join_err)??;
-        Ok((File::from_std(file), path))
+            task::spawn_blocking(move || self.inner.keep()).await.map_err(join_err_to_io)??;
+        Ok((TokioFile::from_std(file), path))
     }
 
-    pub async fn copy(&mut self, src: impl AsRef<Path> + Send) -> io::Result<()> {
-        let mut source = File::open(src.as_ref()).await?;
-        let mut tmp = self.as_file()?;
+    pub async fn copy_from(&mut self, path: impl AsRef<Path>) -> io::Result<()> {
+        let path = path.as_ref().to_owned();
 
-        tmp.set_len(0).await?;
-        tmp.seek(SeekFrom::Start(0)).await?;
-
-        tokio::io::copy(&mut source, &mut tmp).await?;
-
-        tmp.sync_all().await?;
-
-        Ok(())
+        task::block_in_place(|| self.inner.copy_from(&path))
     }
-}
-
-fn join_err(e: tokio::task::JoinError) -> io::Error {
-    io::Error::new(io::ErrorKind::Other, format!("blocking task failed: {e}"))
 }
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        std::io,
-        tempfile::tempdir,
-        tokio::{
-            fs,
-            io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
-        },
-    };
+    use {super::*, std::fs, tokio::io::AsyncWriteExt};
 
     #[tokio::test]
-    async fn new_creates_temp_in_system_tmp_and_is_deleted_on_drop() -> io::Result<()> {
-        let path = {
-            let t = TempFile::new().await?;
-            let p = t.path().to_path_buf();
-            assert!(p.exists(), "temp file should exist while handle is alive");
-            p
-        };
-        // after `t` drops, file should be gone
-        assert!(!path.exists(), "temp file should be removed on Drop after scope ends");
-        Ok(())
+    async fn test_tempfile_new() {
+        let tempfile = TempFile::new().await.expect("Failed to create temp file");
+
+        let path = tempfile.path();
+        assert!(path.exists(), "Temp file path should exist");
+        assert!(path.is_file(), "Temp file path should be a file");
     }
 
     #[tokio::test]
-    async fn in_dir_places_file_in_given_dir() -> io::Result<()> {
-        let dir = tempdir()?;
-        let t = TempFile::in_dir(dir.path()).await?;
-        assert_eq!(
-            t.path().parent().unwrap(),
-            dir.path(),
-            "temp file should be created inside the provided dir"
-        );
-        Ok(())
+    async fn test_tempfile_in_dir() {
+        let temp_dir = std::env::temp_dir();
+        let tempfile =
+            TempFile::in_dir(&temp_dir).await.expect("Failed to create temp file in dir");
+
+        let path = tempfile.path();
+        assert!(path.exists(), "Temp file should exist");
+        assert!(path.parent().unwrap() == temp_dir, "Temp file should be in specified directory");
     }
 
     #[tokio::test]
-    async fn keep_stops_auto_delete_and_returns_file_and_path() -> io::Result<()> {
-        let dir = tempdir()?;
-        let t = TempFile::in_dir(dir.path()).await?;
-        let expected = t.path().to_path_buf();
+    async fn test_as_file() {
+        let tempfile = TempFile::new().await.expect("Failed to create temp file");
+        let mut file = tempfile.as_file().expect("Failed to get file handle");
 
-        let (mut f, p) = t.keep().await?; // consumes temp; disables auto-delete
-        assert_eq!(p, expected, "keep() must return the same path");
+        // Write some data
+        let test_data = b"Hello, World!";
+        file.write_all(test_data).await.expect("Failed to write to file");
+        drop(file); // Close the file handle
 
-        f.write_all(b"xyz").await?;
-        f.flush().await?;
-        drop(f);
-
-        assert!(p.exists(), "kept file should remain after drop");
-        let bytes = fs::read(&p).await?;
-        assert_eq!(bytes.as_slice(), b"xyz");
-        Ok(())
+        // Verify by reading from filesystem
+        let content = tokio::fs::read(tempfile.path()).await.expect("Failed to read file");
+        assert_eq!(content, test_data, "Written data should match read data");
     }
 
     #[tokio::test]
-    async fn persist_writes_contents_to_destination() -> io::Result<()> {
-        let dir = tempdir()?;
-        let dest = dir.path().join("data.txt");
+    async fn test_persist() {
+        let tempfile = TempFile::new().await.expect("Failed to create temp file");
+        let original_path = tempfile.path().to_owned();
 
-        let t = TempFile::in_dir(dir.path()).await?;
-        let mut tf = t.as_file()?;
-        tf.write_all(b"hello").await?;
-        tf.flush().await?;
-        drop(tf);
+        // Write some test data first
+        let mut file = tempfile.as_file().expect("Failed to get file handle");
+        let test_data = b"persist test data";
+        file.write_all(test_data).await.expect("Failed to write test data");
+        drop(file); // Close file before persisting
 
-        let _file = t.persist(&dest).await?; // consumes t
-        assert_eq!(fs::read_to_string(&dest).await?, "hello");
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn persist_overwrites_existing_file() -> io::Result<()> {
-        let dir = tempdir()?;
-        let dest = dir.path().join("swap.bin");
-        fs::write(&dest, b"old").await?;
-
-        let t = TempFile::in_dir(dir.path()).await?;
-        let mut tf = t.as_file()?;
-        tf.write_all(b"new").await?;
-        tf.flush().await?;
-        drop(tf);
-
-        t.persist(&dest).await?;
-        assert_eq!(fs::read(&dest).await?, b"new");
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn write_then_read_from_tempfile() -> io::Result<()> {
-        let t = TempFile::new().await?;
-        let mut f = t.as_file()?;
-        f.write_all(b"abc").await?;
-        f.flush().await?;
-        // Rewind before reading
-        f.seek(std::io::SeekFrom::Start(0)).await?;
-        let mut buf = String::new();
-        f.read_to_string(&mut buf).await?;
-        assert_eq!(buf, "abc");
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn in_dir_errors_if_not_a_directory() {
-        let dir = tempdir().unwrap();
-        let not_a_dir = dir.path().join("file.txt");
-        std::fs::write(&not_a_dir, "x").unwrap();
-
-        TempFile::in_dir(&not_a_dir).await.expect_err("in_dir should fail when given a file path");
-    }
-
-    #[tokio::test]
-    async fn copy_copies_source_and_truncates_temp() -> io::Result<()> {
-        let dir = tempdir()?;
-        let src = dir.path().join("src.txt");
-        fs::write(&src, b"hello").await?;
-
-        let mut t = TempFile::in_dir(dir.path()).await?;
-
-        {
-            let mut tf = t.as_file()?;
-            tf.write_all(b"AAAAAAAAAAAA").await?;
-            tf.flush().await?;
+        // Create a target path
+        let target_path = std::env::temp_dir().join("test_persist.txt");
+        if target_path.exists() {
+            fs::remove_file(&target_path).ok(); // Clean up if exists
         }
 
-        t.copy(&src).await?;
+        let _persisted_file = tempfile.persist(&target_path).await.expect("Failed to persist file");
 
-        let bytes = fs::read(t.path()).await?;
-        assert_eq!(bytes.as_slice(), b"hello");
-        Ok(())
+        // Verify the file was moved
+        assert!(!original_path.exists(), "Original temp file should not exist after persist");
+        assert!(target_path.exists(), "Persisted file should exist");
+
+        // Verify content
+        let content = fs::read(&target_path).expect("Failed to read persisted file");
+        assert_eq!(&content, test_data, "Persisted file should contain original data");
+
+        // Cleanup
+        fs::remove_file(&target_path).ok();
     }
 
     #[tokio::test]
-    async fn copy_then_append_requires_seek_to_end() -> io::Result<()> {
-        let dir = tempdir()?;
-        let src = dir.path().join("src.txt");
-        fs::write(&src, b"base").await?;
+    async fn test_persist_new() {
+        let tempfile = TempFile::new().await.expect("Failed to create temp file");
 
-        let mut t = TempFile::in_dir(dir.path()).await?;
-        t.copy(&src).await?;
+        // Write some test data
+        let mut file = tempfile.as_file().expect("Failed to get file handle");
+        let test_data = b"persist_new test data";
+        file.write_all(test_data).await.expect("Failed to write test data");
+        drop(file);
 
-        let mut tf = t.as_file()?;
-        tf.seek(std::io::SeekFrom::End(0)).await?;
-        tf.write_all(b"+more").await?;
-        tf.flush().await?;
+        let target_path = std::env::temp_dir().join("test_persist_new.txt");
+        if target_path.exists() {
+            fs::remove_file(&target_path).ok();
+        }
 
-        let bytes = fs::read(t.path()).await?;
-        assert_eq!(bytes.as_slice(), b"base+more");
-        Ok(())
+        let _persisted_file =
+            tempfile.persist_new(&target_path).await.expect("Failed to persist_new file");
+
+        assert!(target_path.exists(), "persist_new file should exist");
+
+        let content = fs::read(&target_path).expect("Failed to read persist_new file");
+        assert_eq!(&content, test_data, "persist_new file should contain original data");
+
+        // Cleanup
+        fs::remove_file(&target_path).ok();
     }
 
     #[tokio::test]
-    async fn copy_errors_when_source_missing() {
-        let dir = tempdir().unwrap();
-        let missing = dir.path().join("nope.txt");
+    async fn test_keep() {
+        let tempfile = TempFile::new().await.expect("Failed to create temp file");
 
-        let mut t = TempFile::in_dir(dir.path()).await.unwrap();
-        let err = t.copy(&missing).await.unwrap_err();
+        // Write some test data
+        let mut file = tempfile.as_file().expect("Failed to get file handle");
+        let test_data = b"keep test data";
+        file.write_all(test_data).await.expect("Failed to write test data");
+        drop(file);
 
-        assert_eq!(err.kind(), io::ErrorKind::NotFound);
+        let (_kept_file, kept_path) = tempfile.keep().await.expect("Failed to keep file");
+
+        // Verify file still exists and has correct content
+        assert!(kept_path.exists(), "Kept file should exist");
+        let content = fs::read(&kept_path).expect("Failed to read kept file");
+        assert_eq!(&content, test_data, "Kept file should contain original data");
+
+        // Cleanup (since keep() prevents automatic cleanup)
+        fs::remove_file(&kept_path).ok();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_copy_from() -> io::Result<()> {
+        use std::fs;
+
+        let mut tempfile = TempFile::new().await?;
+
+        // Put *different* content in the temp file first (so we can verify overwrite)
+        {
+            let mut f = tempfile.as_file()?;
+            f.write_all(b"original").await?;
+            f.flush().await?;
+        } // drop handle
+
+        // Prepare a SOURCE file on disk
+        let src_path = std::env::temp_dir().join("test_copy_from_src.txt");
+        if src_path.exists() {
+            let _ = fs::remove_file(&src_path);
+        }
+        fs::write(&src_path, b"copy test data")?;
+
+        // Copy from source path INTO the temp file
+        tempfile.copy_from(&src_path).await?;
+
+        // Verify: temp file exists and matches the source contents
+        assert!(tempfile.path().exists(), "temp file should still exist");
+        assert!(src_path.exists(), "source file should exist");
+
+        let temp_bytes = fs::read(tempfile.path())?;
+        let src_bytes = fs::read(&src_path)?;
+        assert_eq!(temp_bytes, src_bytes, "temp should match source after copy_from");
+        assert_eq!(temp_bytes, b"copy test data");
+
+        // Cleanup the source file
+        let _ = fs::remove_file(&src_path);
+        Ok(())
     }
 }

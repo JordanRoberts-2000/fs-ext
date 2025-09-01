@@ -48,7 +48,7 @@ where
 
     let mut temp = fsx::file::temp_in(parent)?;
 
-    temp.copy(path)?;
+    temp.copy_from(path)?;
 
     update_fn(temp.as_file_mut())?;
 

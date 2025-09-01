@@ -2,4 +2,4 @@ pub mod dir;
 pub mod file;
 mod types;
 
-pub use types::TempFile;
+pub use types::{TempDir, TempFile};
