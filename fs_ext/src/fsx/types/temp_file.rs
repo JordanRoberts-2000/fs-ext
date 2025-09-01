@@ -1,4 +1,5 @@
 use {
+    crate::IoResultExt,
     std::{
         fs::File,
         io::{self, Seek, SeekFrom},
@@ -16,7 +17,13 @@ impl TempFile {
     }
 
     pub fn in_dir(dir: impl AsRef<Path>) -> io::Result<Self> {
-        Builder::new().prefix(".").suffix(".tmp").tempfile_in(dir.as_ref()).map(Self)
+        let dir = dir.as_ref();
+        Builder::new()
+            .prefix(".")
+            .suffix(".tmp")
+            .tempfile_in(dir)
+            .map(Self)
+            .with_path_context("failed to create tempfile in", dir)
     }
 
     pub fn as_file(&self) -> &File {
@@ -32,28 +39,45 @@ impl TempFile {
     }
 
     pub fn persist_new(self, path: impl AsRef<Path>) -> io::Result<File> {
-        self.0.persist_noclobber(path).map_err(|e| e.error)
+        let dst = path.as_ref().to_owned();
+        let src = self.path().to_owned();
+        self.0.persist_noclobber(&dst).map_err(|e| e.error).with_paths_context(
+            "failed to persist tempfile (noclobber)",
+            &src,
+            &dst,
+        )
     }
 
     pub fn persist(self, path: impl AsRef<Path>) -> io::Result<File> {
-        self.0.persist(path).map_err(|e| e.error)
+        let dst = path.as_ref().to_owned();
+        let src = self.path().to_owned();
+        self.0.persist(&dst).map_err(|e| e.error).with_paths_context(
+            "failed to persist tempfile",
+            &src,
+            &dst,
+        )
     }
 
     pub fn keep(self) -> io::Result<(File, PathBuf)> {
-        self.0.keep().map_err(|e| e.error)
+        let src = self.path().to_owned();
+        self.0.keep().map_err(|e| e.error).with_path_context("failed to keep tempfile", &src)
     }
 
     pub fn copy_from(&mut self, path: impl AsRef<Path>) -> io::Result<()> {
-        let mut source = File::open(path.as_ref())?;
+        let src = path.as_ref().to_owned();
+        let dst = self.path().to_owned();
+
+        let mut source =
+            File::open(&src).with_path_context("failed to open source for copy", &src)?;
+
+        // Truncate + rewind destination with context
         let tmp = self.as_file_mut();
+        tmp.set_len(0).with_path_context("failed to truncate tempfile", &dst)?;
+        tmp.seek(SeekFrom::Start(0)).with_path_context("failed to seek tempfile to start", &dst)?;
 
-        // Truncate the temp file
-        tmp.set_len(0)?;
-        tmp.seek(SeekFrom::Start(0))?;
+        io::copy(&mut source, tmp).with_paths_context("failed to copy", &src, &dst)?;
 
-        io::copy(&mut source, tmp)?;
-
-        tmp.sync_all()?;
+        tmp.sync_all().with_path_context("failed to fsync tempfile", &dst)?;
 
         Ok(())
     }

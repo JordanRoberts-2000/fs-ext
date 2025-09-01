@@ -1,4 +1,5 @@
 use {
+    crate::IoResultExt,
     std::{
         io,
         path::{Path, PathBuf},
@@ -15,7 +16,12 @@ impl TempDir {
     }
 
     pub fn in_dir(dir: impl AsRef<Path>) -> io::Result<Self> {
-        Builder::new().prefix(".tmp-").tempdir_in(dir.as_ref()).map(Self)
+        let dir = dir.as_ref();
+        Builder::new()
+            .prefix(".tmp-")
+            .tempdir_in(dir)
+            .map(Self)
+            .with_path_context("failed to create tempdir in", dir)
     }
 
     pub fn path(&self) -> &Path {
@@ -27,7 +33,8 @@ impl TempDir {
     }
 
     pub fn close(self) -> io::Result<()> {
-        self.0.close()
+        let p = self.0.path().to_path_buf();
+        self.0.close().with_path_context("failed to close tempdir", p)
     }
 }
 
