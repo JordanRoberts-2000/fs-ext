@@ -109,7 +109,7 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn update_loads_then_applies_closure_and_persists() -> io::Result<()> {
         let dir = tempdir()?;
         let dst = dir.path().join("notes.txt");
