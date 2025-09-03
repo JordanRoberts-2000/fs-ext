@@ -1,10 +1,16 @@
-use std::{fs, io, path::Path};
+use {
+    crate::PathExt,
+    std::{fs, io, path::Path},
+};
 
+#[cfg_attr(test, fs_ext_test_macros::fs_test(rejects_missing_path, rejects_dir))]
 pub fn assert_writable(path: impl AsRef<Path>) -> io::Result<()> {
     _assert_writable(path.as_ref())
 }
 
 fn _assert_writable(path: &Path) -> io::Result<()> {
+    path.is_file_strict()?;
+
     match fs::OpenOptions::new().write(true).open(path) {
         Ok(_) => Ok(()),
         Err(e) => {
@@ -29,18 +35,6 @@ mod tests {
 
         let res = assert_writable(&file_path);
         assert!(res.is_ok(), "expected Ok(()), got {res:?}");
-    }
-
-    #[test]
-    fn err_when_file_missing() {
-        let dir = tempdir().unwrap();
-        let missing = dir.path().join("missing.txt");
-
-        let err = assert_writable(&missing).unwrap_err();
-        assert_eq!(err.kind(), io::ErrorKind::NotFound);
-        let msg = err.to_string();
-        assert!(msg.contains("is not writable"), "msg={msg}");
-        assert!(msg.contains(missing.to_string_lossy().as_ref()), "msg={msg}");
     }
 
     #[cfg(unix)]

@@ -1,5 +1,6 @@
 use std::{fs, io, path::Path};
 
+#[cfg_attr(test, fs_ext_test_macros::fs_test(rejects_missing_path, rejects_dir))]
 pub fn read_bytes(path: impl AsRef<Path>) -> io::Result<Vec<u8>> {
     _read_bytes(path.as_ref())
 }
@@ -12,11 +13,7 @@ fn _read_bytes(path: &Path) -> io::Result<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::read_bytes,
-        std::{fs, io},
-        tempfile::tempdir,
-    };
+    use {super::read_bytes, std::fs, tempfile::tempdir};
 
     #[test]
     fn returns_bytes_for_existing_file() {
@@ -26,14 +23,5 @@ mod tests {
 
         let bytes = read_bytes(&file).unwrap();
         assert_eq!(bytes, b"hello");
-    }
-
-    #[test]
-    fn err_for_missing_path() {
-        let dir = tempdir().unwrap();
-        let missing = dir.path().join("nope.txt");
-
-        let err = read_bytes(&missing).unwrap_err();
-        assert_eq!(err.kind(), io::ErrorKind::NotFound);
     }
 }

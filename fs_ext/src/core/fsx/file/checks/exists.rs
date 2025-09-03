@@ -1,5 +1,6 @@
 use std::{fs, io, path::Path};
 
+#[cfg_attr(test, fs_ext_test_macros::fs_test(existing_file_ok))]
 pub fn exists(path: impl AsRef<Path>) -> io::Result<bool> {
     _exists(path.as_ref())
 }
@@ -17,16 +18,6 @@ fn _exists(path: &Path) -> io::Result<bool> {
 #[cfg(test)]
 mod tests {
     use {super::exists, std::fs, tempfile::tempdir};
-
-    #[test]
-    fn returns_true_for_regular_file() {
-        let dir = tempdir().unwrap();
-        let file = dir.path().join("a.txt");
-        fs::write(&file, "hi").unwrap();
-
-        let res = exists(&file).unwrap();
-        assert!(res, "expected true for regular file");
-    }
 
     #[test]
     fn returns_false_for_missing_path() {

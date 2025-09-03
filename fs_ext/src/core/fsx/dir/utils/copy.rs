@@ -4,9 +4,10 @@ use {
 };
 
 pub fn copy(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
-    let src = src.as_ref();
-    let dst = dst.as_ref();
+    _copy(src.as_ref(), dst.as_ref())
+}
 
+fn _copy(src: &Path, dst: &Path) -> io::Result<()> {
     fsx::dir::assert_exists(src)?;
     fsx::dir::ensure(dst)?;
     fsx::dir::copy_dir_contents(src, dst)

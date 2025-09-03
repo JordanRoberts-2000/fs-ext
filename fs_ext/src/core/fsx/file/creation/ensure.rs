@@ -4,6 +4,7 @@ use std::{
     path::Path,
 };
 
+#[cfg_attr(test, fs_ext_test_macros::fs_test(existing_file_ok, rejects_dir, new_file_ok))]
 pub fn ensure(path: impl AsRef<Path>) -> io::Result<File> {
     _ensure(path.as_ref())
 }
@@ -19,11 +20,7 @@ fn _ensure(path: &Path) -> io::Result<File> {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::ensure,
-        std::{fs, io},
-        tempfile::tempdir,
-    };
+    use {super::ensure, std::fs, tempfile::tempdir};
 
     #[test]
     fn creates_file_if_missing() {
@@ -40,7 +37,7 @@ mod tests {
     }
 
     #[test]
-    fn succeeds_if_file_already_exists_and_preserves_contents() {
+    fn preserves_contents_if_file_already_exists() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("existing.txt");
 
@@ -50,27 +47,5 @@ mod tests {
 
         let contents = fs::read(&file_path).unwrap();
         assert_eq!(contents, b"hello", "ensure() must not alter existing contents");
-    }
-
-    #[test]
-    fn errors_if_path_is_a_directory() {
-        let dir = tempdir().unwrap();
-        let dir_path = dir.path().join("folder.ts");
-
-        fs::create_dir(&dir_path).unwrap();
-
-        let err = ensure(&dir_path).unwrap_err();
-
-        // On Unix this is commonly IsADirectory; on Windows often PermissionDenied.
-        let kind = err.kind();
-        assert!(
-            matches!(
-                kind,
-                io::ErrorKind::IsADirectory
-                    | io::ErrorKind::PermissionDenied
-                    | io::ErrorKind::Other
-            ),
-            "Unexpected error kind for directory: {kind:?}"
-        );
     }
 }

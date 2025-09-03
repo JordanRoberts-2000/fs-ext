@@ -6,7 +6,10 @@ use {
 
 #[cfg_attr(test, fs_ext_test_macros::fs_test(rejects_file, rejects_missing_path, existing_dir_ok))]
 pub fn size(path: impl AsRef<Path>) -> io::Result<u128> {
-    let path = path.as_ref();
+    _size(path.as_ref())
+}
+
+fn _size(path: &Path) -> io::Result<u128> {
     let mut total: u128 = 0;
 
     fsx::dir::assert_exists(path)?;

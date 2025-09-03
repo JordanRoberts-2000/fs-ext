@@ -5,7 +5,10 @@ use {
 
 #[cfg_attr(test, fs_ext_test_macros::fs_test(rejects_missing_path, rejects_file, existing_dir_ok))]
 pub fn clear(path: impl AsRef<Path>) -> io::Result<()> {
-    let path = path.as_ref();
+    _clear(path.as_ref())
+}
+
+fn _clear(path: &Path) -> io::Result<()> {
     fsx::dir::assert_exists(path)?;
 
     let entries = fs::read_dir(path).with_path_context("failed to read directory", path)?;

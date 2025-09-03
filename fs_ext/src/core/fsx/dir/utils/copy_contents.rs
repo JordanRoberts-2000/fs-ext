@@ -4,9 +4,10 @@ use {
 };
 
 pub fn copy_dir_contents(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
-    let src = src.as_ref();
-    let dst = dst.as_ref();
+    _copy_dir_contents(src.as_ref(), dst.as_ref())
+}
 
+fn _copy_dir_contents(src: &Path, dst: &Path) -> io::Result<()> {
     fsx::dir::assert_exists(src)?;
     fsx::dir::assert_exists(dst)?;
 
@@ -24,7 +25,7 @@ pub fn copy_dir_contents(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Re
 
         if ft.is_dir() {
             fsx::dir::create_new(&dst_path)?;
-            copy_dir_contents(&entry_path, &dst_path)?;
+            _copy_dir_contents(&entry_path, &dst_path)?;
         } else if ft.is_file() {
             fs::copy(&entry_path, &dst_path).with_paths_context(
                 "failed to copy",

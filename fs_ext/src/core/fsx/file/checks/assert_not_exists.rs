@@ -1,5 +1,6 @@
 use std::{fs, io, path::Path};
 
+#[cfg_attr(test, fs_ext_test_macros::fs_test(rejects_dir, rejects_existing_file))]
 pub fn assert_not_exists(path: impl AsRef<Path>) -> io::Result<()> {
     _assert_not_exists(path.as_ref())
 }

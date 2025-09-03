@@ -8,6 +8,7 @@ use {
     },
 };
 
+#[cfg_attr(test, fs_ext_test_macros::fs_test(existing_file_ok, rejects_dir, new_file_ok))]
 pub fn touch(path: impl AsRef<Path>) -> io::Result<File> {
     _touch(path.as_ref())
 }
@@ -36,7 +37,7 @@ mod tests {
     use {
         super::touch,
         std::{
-            fs, io,
+            fs,
             thread::sleep,
             time::{Duration, SystemTime},
         },
@@ -87,27 +88,5 @@ mod tests {
 
         let contents = fs::read(&file_path).unwrap();
         assert_eq!(contents, b"original", "Touch must not alter file contents");
-    }
-
-    #[test]
-    fn errors_if_path_is_directory() {
-        let dir = tempdir().unwrap();
-        let subdir_path = dir.path().join("a_dir");
-        fs::create_dir(&subdir_path).unwrap();
-
-        let result = touch(&subdir_path);
-        assert!(result.is_err(), "Touch should error on a directory path");
-
-        // On Unix this is typically IsADirectory; on Windows often PermissionDenied.
-        let kind = result.unwrap_err().kind();
-        assert!(
-            matches!(
-                kind,
-                io::ErrorKind::IsADirectory
-                    | io::ErrorKind::PermissionDenied
-                    | io::ErrorKind::Other
-            ),
-            "Unexpected error kind for directory: {kind:?}"
-        );
     }
 }

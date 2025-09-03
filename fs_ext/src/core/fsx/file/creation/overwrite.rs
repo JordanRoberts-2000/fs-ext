@@ -4,6 +4,7 @@ use std::{
     path::Path,
 };
 
+#[cfg_attr(test, fs_ext_test_macros::fs_test(existing_file_ok, rejects_dir, new_file_ok))]
 pub fn overwrite(path: impl AsRef<Path>) -> io::Result<File> {
     _overwrite(path.as_ref())
 }
@@ -21,10 +22,7 @@ fn _overwrite(path: &Path) -> io::Result<File> {
 mod tests {
     use {
         super::overwrite,
-        std::{
-            fs,
-            io::{self, Read},
-        },
+        std::{fs, io::Read},
         tempfile::tempdir,
     };
 
@@ -71,27 +69,5 @@ mod tests {
         let mut read_back = String::new();
         fs::File::open(&file_path).unwrap().read_to_string(&mut read_back).unwrap();
         assert_eq!(read_back, "hello", "Should be able to write via returned handle");
-    }
-
-    #[test]
-    fn errors_if_path_is_a_directory() {
-        let dir = tempdir().unwrap();
-        let dir_path = dir.path().join("folder");
-
-        fs::create_dir(&dir_path).unwrap();
-
-        let err = overwrite(&dir_path).unwrap_err();
-
-        // On Unix commonly IsADirectory; on Windows often PermissionDenied; sometimes Other.
-        let kind = err.kind();
-        assert!(
-            matches!(
-                kind,
-                io::ErrorKind::IsADirectory
-                    | io::ErrorKind::PermissionDenied
-                    | io::ErrorKind::Other
-            ),
-            "Unexpected error kind for directory: {kind:?}"
-        );
     }
 }

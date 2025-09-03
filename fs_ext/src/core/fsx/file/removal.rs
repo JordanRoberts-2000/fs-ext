@@ -1,10 +1,13 @@
-use std::{fs, io, path::Path};
+use {
+    crate::{IoResultExt, PathExt},
+    std::{fs, io, path::Path},
+};
 
+#[cfg_attr(test, fs_ext_test_macros::fs_test(rejects_missing_path, rejects_dir))]
 pub fn remove(path: impl AsRef<Path>) -> io::Result<()> {
     let path = path.as_ref();
-    fs::remove_file(path).map_err(|e| {
-        io::Error::new(e.kind(), format!("failed to remove '{}': {}", path.display(), e))
-    })
+    path.assert_file()?;
+    fs::remove_file(path).with_path_context("failed to remove", path)
 }
 
 pub fn trash(path: impl AsRef<Path>) -> io::Result<()> {

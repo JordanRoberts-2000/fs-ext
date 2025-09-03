@@ -1,10 +1,16 @@
-use std::{fs, io, path::Path};
+use {
+    crate::PathExt,
+    std::{fs, io, path::Path},
+};
 
+#[cfg_attr(test, fs_ext_test_macros::fs_test(rejects_missing_path, rejects_dir))]
 pub fn assert_readable(path: impl AsRef<Path>) -> io::Result<()> {
     _assert_readable(path.as_ref())
 }
 
 fn _assert_readable(path: &Path) -> io::Result<()> {
+    path.assert_file()?;
+
     match fs::File::open(path) {
         Ok(_) => Ok(()),
         Err(e) => {
@@ -29,15 +35,6 @@ mod tests {
 
         let res = assert_readable(&file_path);
         assert!(res.is_ok(), "expected Ok(()), got {res:?}");
-    }
-
-    #[test]
-    fn err_when_file_missing() {
-        let dir = tempdir().unwrap();
-        let missing = dir.path().join("nope.txt");
-
-        let err = assert_readable(&missing).unwrap_err();
-        assert_eq!(err.kind(), io::ErrorKind::NotFound);
     }
 
     #[cfg(unix)]

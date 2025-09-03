@@ -3,17 +3,14 @@ use {
     std::{io, path::Path},
 };
 
+#[cfg_attr(test, fs_ext_test_macros::fs_test(rejects_missing_path, rejects_dir, existing_file_ok))]
 pub fn is_empty(path: impl AsRef<Path>) -> io::Result<bool> {
     Ok(fsx::file::size(path)? == 0)
 }
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::is_empty,
-        std::{fs, io},
-        tempfile::tempdir,
-    };
+    use {super::is_empty, std::fs, tempfile::tempdir};
 
     #[test]
     fn returns_true_for_empty_file() {
@@ -33,14 +30,5 @@ mod tests {
 
         let res = is_empty(&file).unwrap();
         assert!(!res, "expected false for non-empty file");
-    }
-
-    #[test]
-    fn propagates_error_for_missing_file() {
-        let dir = tempdir().unwrap();
-        let missing = dir.path().join("nope.txt");
-
-        let err = is_empty(&missing).unwrap_err();
-        assert_eq!(err.kind(), io::ErrorKind::NotFound);
     }
 }

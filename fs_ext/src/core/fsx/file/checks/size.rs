@@ -1,22 +1,29 @@
-use std::{fs, io, path::Path};
+use {
+    crate::IoResultExt,
+    std::{fs, io, path::Path},
+};
 
+#[cfg_attr(test, fs_ext_test_macros::fs_test(rejects_missing_path, rejects_dir))]
 pub fn size(path: impl AsRef<Path>) -> io::Result<u64> {
     _size(path.as_ref())
 }
 
 fn _size(path: &Path) -> io::Result<u64> {
-    fs::metadata(path).map(|m| m.len()).map_err(|e| {
-        io::Error::new(e.kind(), format!("Failed to get size of '{}': {e}", path.display()))
-    })
+    let meta = fs::metadata(path).with_path_context("Failed to get metadata", path)?;
+
+    if !meta.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("Path '{}' is not a regular file", path.display()),
+        ));
+    }
+
+    Ok(meta.len())
 }
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::size,
-        std::{fs, io},
-        tempfile::tempdir,
-    };
+    use {super::size, std::fs, tempfile::tempdir};
 
     #[test]
     fn returns_size_for_regular_file() {
@@ -38,14 +45,5 @@ mod tests {
 
         let len = size(&file).unwrap();
         assert_eq!(len, 0);
-    }
-
-    #[test]
-    fn err_when_missing() {
-        let dir = tempdir().unwrap();
-        let missing = dir.path().join("nope.txt");
-
-        let err = size(&missing).unwrap_err();
-        assert_eq!(err.kind(), io::ErrorKind::NotFound);
     }
 }

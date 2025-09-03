@@ -1,11 +1,20 @@
-use std::{
-    fs::{File, OpenOptions},
-    io,
-    path::Path,
+use {
+    crate::IoResultExt,
+    std::{
+        fs::{File, OpenOptions},
+        io,
+        path::Path,
+    },
 };
 
+#[cfg_attr(test, fs_ext_test_macros::fs_test(rejects_missing_path, rejects_dir))]
 pub fn open(path: impl AsRef<Path>) -> io::Result<File> {
-    OpenOptions::new().write(true).read(true).open(path)
+    let path = path.as_ref();
+    OpenOptions::new()
+        .write(true)
+        .read(true)
+        .open(path)
+        .with_path_context("failed to open file", path)
 }
 
 #[cfg(test)]
@@ -46,24 +55,6 @@ mod tests {
         let err = open(&path).unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::NotFound);
         assert!(!path.exists(), "file should not be created");
-    }
-
-    #[test]
-    fn error_when_target_is_directory() {
-        let dir = tempdir().unwrap();
-        let target = dir.path();
-
-        let err = open(target).unwrap_err();
-        assert!(
-            matches!(
-                err.kind(),
-                io::ErrorKind::IsADirectory
-                    | io::ErrorKind::PermissionDenied
-                    | io::ErrorKind::Other
-            ),
-            "unexpected error kind: {:?}",
-            err.kind()
-        );
     }
 
     #[test]

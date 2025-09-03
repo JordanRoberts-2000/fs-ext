@@ -6,6 +6,7 @@ mod error;
 pub mod formats;
 mod macros;
 mod traits;
+mod types;
 pub(crate) mod utils;
 
 #[cfg(feature = "tokio")]
@@ -14,5 +15,6 @@ pub mod tokio;
 pub use {
     core::*,
     error::{CodecError, DeserializeError, SerializeError},
-    traits::{Format, IoResultExt},
+    traits::{Format, IoResultExt, PathExt},
+    types::PathKind,
 };
