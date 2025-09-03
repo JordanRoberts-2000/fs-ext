@@ -5,12 +5,12 @@ use {
 };
 
 #[cfg_attr(test, fs_ext_test_macros::fs_test(rejects_file, rejects_missing_path, existing_dir_ok))]
-pub fn size(path: impl AsRef<Path>) -> io::Result<u128> {
+pub fn size(path: impl AsRef<Path>) -> io::Result<u64> {
     _size(path.as_ref())
 }
 
-fn _size(path: &Path) -> io::Result<u128> {
-    let mut total: u128 = 0;
+fn _size(path: &Path) -> io::Result<u64> {
+    let mut total: u64 = 0;
 
     fsx::dir::assert_exists(path)?;
 
@@ -36,7 +36,7 @@ fn _size(path: &Path) -> io::Result<u128> {
                     ),
                 )
             })?;
-            total += len as u128;
+            total += len;
         }
     }
 
