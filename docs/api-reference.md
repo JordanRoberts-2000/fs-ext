@@ -9,7 +9,7 @@
 - `tempfile!` — Create temp file
 - `tempdir!` — Create temp dir
 
-See: `docs/macros.md`
+See: - [docs/macros](./macros.md)
 
 ---
 
@@ -19,7 +19,7 @@ See: `docs/macros.md`
 - `PathExt` — Strict checks/assertions on `Path` (`is_*_strict`, `assert_*`, `kind()`).
 - `Format` — Pluggable (de)serialization with provided `load` / `save` helpers.
 
-See: `docs/traits.md`
+See: - [docs/traits](./traits.md)
 
 ---
 
@@ -29,7 +29,7 @@ See: `docs/traits.md`
 - `TempFile` — RAII temp file with `as_file[_mut]()`, `persist[_new]()`, `keep()`, `copy_from()`.
 - `DirQuery` — Builder for directory scanning (`collect`, `count`, `exists`), with filters.
 
-See: `docs/dirquery.md`
+See: - [docs/dirquery](./dirquery.md)
 
 ---
 
@@ -65,7 +65,7 @@ See: `docs/dirquery.md`
 - `copy_contents(src, dst)` — Copy entries from `src` into existing `dst`.
 - `copy(src, dst)` — Ensure `dst`, then copy entire tree.
 
-See: `docs/dir.md`
+See: - [docs/dir](./dir.md)
 
 ---
 
@@ -152,6 +152,6 @@ See: `docs/dir.md`
 - `temp() -> TempFile`
 - `temp_in(parent) -> TempFile`
 
-See: `docs/file.md`
+See: - [docs/file](./file.md)
 
 ---
