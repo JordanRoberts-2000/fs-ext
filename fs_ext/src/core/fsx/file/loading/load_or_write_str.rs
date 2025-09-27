@@ -1,21 +1,27 @@
 use {
     crate::{CodecError, Format, fsx},
     serde::de::DeserializeOwned,
-    std::{io::Write, path::Path},
+    std::{
+        io::{self, Write},
+        path::Path,
+    },
 };
 
-pub fn load_or_write_str<F, T>(path: impl AsRef<Path>, str: &str) -> Result<T, CodecError>
+pub fn load_or_write_str<F, T>(
+    path: impl AsRef<Path>, str: impl AsRef<str>,
+) -> Result<T, CodecError>
 where
     F: Format,
     T: DeserializeOwned,
 {
     let path = path.as_ref();
+    let str = str.as_ref();
 
     match F::load::<T>(path) {
         Ok(v) => Ok(v),
 
         Err(CodecError::Io(ref e)) if e.kind() == std::io::ErrorKind::NotFound => {
-            fsx::file::atomic::create_new(path, |file| {
+            fsx::file::atomic::create_new(path, |file| -> io::Result<()> {
                 file.write_all(str.as_bytes())?;
                 file.sync_all()?;
                 Ok(())

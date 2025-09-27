@@ -3,9 +3,10 @@ use {
     std::{fs::File, io, path::Path},
 };
 
-pub fn create_new<F>(path: impl AsRef<Path>, write_fn: F) -> io::Result<()>
+pub fn create_new<F, T, E>(path: impl AsRef<Path>, write_fn: F) -> io::Result<T>
 where
-    F: FnOnce(&mut File) -> io::Result<()>,
+    E: Into<io::Error>,
+    F: FnOnce(&mut File) -> Result<T, E>,
 {
     let path = path.as_ref();
     let parent = path.parent().ok_or_else(|| {
@@ -14,15 +15,16 @@ where
 
     let mut temp = fsx::file::temp_in(parent)?;
 
-    write_fn(temp.as_file_mut())?;
+    let val = write_fn(temp.as_file_mut()).map_err(Into::into)?;
 
     temp.persist_new(path)?;
-    Ok(())
+    Ok(val)
 }
 
-pub fn overwrite<F>(path: impl AsRef<Path>, write_fn: F) -> io::Result<()>
+pub fn overwrite<F, T, E>(path: impl AsRef<Path>, write_fn: F) -> io::Result<T>
 where
-    F: FnOnce(&mut File) -> io::Result<()>,
+    E: Into<io::Error>,
+    F: FnOnce(&mut File) -> Result<T, E>,
 {
     let path = path.as_ref();
     let parent = path.parent().ok_or_else(|| {
@@ -31,15 +33,16 @@ where
 
     let mut temp = fsx::file::temp_in(parent)?;
 
-    write_fn(temp.as_file_mut())?;
+    let val = write_fn(temp.as_file_mut()).map_err(Into::into)?;
 
     temp.persist(path)?;
-    Ok(())
+    Ok(val)
 }
 
-pub fn update<F>(path: impl AsRef<Path>, update_fn: F) -> io::Result<()>
+pub fn update<F, T, E>(path: impl AsRef<Path>, write_fn: F) -> io::Result<T>
 where
-    F: FnOnce(&mut File) -> io::Result<()>,
+    E: Into<io::Error>,
+    F: FnOnce(&mut File) -> Result<T, E>,
 {
     let path = path.as_ref();
     let parent = path.parent().ok_or_else(|| {
@@ -50,10 +53,10 @@ where
 
     temp.copy_from(path)?;
 
-    update_fn(temp.as_file_mut())?;
+    let val = write_fn(temp.as_file_mut()).map_err(Into::into)?;
 
     temp.persist(path)?;
-    Ok(())
+    Ok(val)
 }
 
 #[cfg(test)]
@@ -72,13 +75,14 @@ mod tests {
         let dir = tempdir()?;
         let dst = dir.path().join("fresh.txt");
 
-        create_new(&dst, |f| {
+        create_new(&dst, |f| -> io::Result<()> {
             f.write_all(b"hello, world")?;
+            f.sync_all()?;
             Ok(())
         })?;
         assert_eq!(fs::read_to_string(&dst)?, "hello, world");
 
-        let err = create_new(&dst, |_f| Ok(())).unwrap_err();
+        let err = create_new(&dst, |_f| -> io::Result<()> { Ok(()) }).unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
 
         Ok(())
@@ -91,7 +95,7 @@ mod tests {
 
         fs::write(&dst, b"old content that is longer")?;
 
-        overwrite(&dst, |f| {
+        overwrite(&dst, |f| -> io::Result<()> {
             f.write_all(b"new")?;
             Ok(())
         })?;
@@ -109,7 +113,7 @@ mod tests {
 
         fs::write(&dst, b"base")?;
 
-        update(&dst, |f| {
+        update(&dst, |f| -> io::Result<()> {
             f.seek(SeekFrom::End(0))?;
             f.write_all(b"+more")?;
             Ok(())
