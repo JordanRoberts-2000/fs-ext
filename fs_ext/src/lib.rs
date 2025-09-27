@@ -3,7 +3,6 @@ pub mod test_utils;
 
 mod core;
 mod error;
-pub mod formats;
 mod macros;
 mod traits;
 mod types;
@@ -16,5 +15,5 @@ pub use {
     core::*,
     error::{CodecError, DeserializeError, SerializeError},
     traits::{Format, IoResultExt, PathExt},
-    types::PathKind,
+    types::{PathKind, formats},
 };

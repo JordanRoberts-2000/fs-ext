@@ -17,3 +17,31 @@ where
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::*,
+        crate::{Format, formats::Json},
+        serde::{Deserialize, Serialize},
+        tempfile::tempdir,
+    };
+
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    struct Demo {
+        id: u32,
+        name: String,
+    }
+
+    #[tokio::test]
+    async fn async_save_auto_smoke_json() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("demo.json");
+        let model = Demo { id: 1, name: "alpha".into() };
+
+        save_auto(&path, model.clone()).await.expect("async save_auto should succeed");
+
+        let roundtrip: Demo = Json::load(&path).expect("sync load should succeed");
+        assert_eq!(roundtrip, model);
+    }
+}
