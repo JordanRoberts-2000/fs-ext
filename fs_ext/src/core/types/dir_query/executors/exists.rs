@@ -1,7 +1,7 @@
 use {crate::DirQuery, std::io};
 
 impl DirQuery {
-    pub fn exist(self) -> io::Result<bool> {
+    pub fn exists(self) -> io::Result<bool> {
         Ok(self.collect()?.len() != 0)
     }
 }

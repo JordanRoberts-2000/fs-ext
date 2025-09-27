@@ -5,13 +5,15 @@ use {
     tokio::task,
 };
 
-pub async fn load_or_write_str<F, T>(path: impl AsRef<Path>, content: &str) -> Result<T, CodecError>
+pub async fn load_or_write_str<F, T>(
+    path: impl AsRef<Path>, content: impl AsRef<str>,
+) -> Result<T, CodecError>
 where
     F: Format,
     T: DeserializeOwned + Send + 'static,
 {
     let path = path.as_ref().to_owned();
-    let content_owned = content.to_owned();
+    let content_owned = content.as_ref().to_owned();
 
     task::spawn_blocking(move || fsx::file::load_or_write_str::<F, T>(&path, &content_owned))
         .await
