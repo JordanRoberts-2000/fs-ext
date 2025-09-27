@@ -1,4 +1,4 @@
-# 📁 `fsx::dir` — Directory Utilities
+# 📁 `fs_ext::dir` — Directory Utilities
 
 Utilities for validating, creating, querying, and manipulating directories.  
 Designed to give clear errors (with path context) and sensible, safe defaults.
@@ -37,7 +37,7 @@ Designed to give clear errors (with path context) and sensible, safe defaults.
 Ensures the path exists _and_ is a directory.
 
 ```rust
-use fs_ext::fsx::dir;
+use fs_ext::dir;
 
 dir::assert_exists("data")?;
 ```
@@ -52,7 +52,7 @@ dir::assert_exists("data")?;
 Ensures the path **does not** exist (neither file nor directory).
 
 ```rust
-use fs_ext::fsx::dir;
+use fs_ext::dir;
 
 dir::assert_not_exists("data/new-project")?;
 ```
@@ -67,7 +67,7 @@ dir::assert_not_exists("data/new-project")?;
 Returns whether a path exists **and is a directory**.
 
 ```rust
-use fs_ext::fsx::dir;
+use fs_ext::dir;
 
 if dir::exists("cache")? {
     // ...
@@ -84,7 +84,7 @@ if dir::exists("cache")? {
 Checks whether a directory contains **no entries**.
 
 ```rust
-use fs_ext::fsx::dir;
+use fs_ext::dir;
 
 if dir::is_empty("staging")? {
     // safe to reuse
@@ -102,7 +102,7 @@ if dir::is_empty("staging")? {
 Computes total byte size of **all regular files** under the directory (recursive).
 
 ```rust
-use fs_ext::fsx::dir;
+use fs_ext::dir;
 
 let bytes = dir::size("assets")?;
 println!("assets/ total size: {bytes} bytes");
@@ -117,7 +117,7 @@ println!("assets/ total size: {bytes} bytes");
 Creates a **new** directory. Fails if it already exists.
 
 ```rust
-use fs_ext::fsx::dir;
+use fs_ext::dir;
 
 dir::create_new("output")?; // like `mkdir` without -p
 ```
@@ -129,7 +129,7 @@ dir::create_new("output")?; // like `mkdir` without -p
 Creates a directory **and all parents** if missing (idempotent).
 
 ```rust
-use fs_ext::fsx::dir;
+use fs_ext::dir;
 
 dir::ensure("var/tmp/cache")?; // like `mkdir -p`
 ```
@@ -146,7 +146,7 @@ Use them and then call `.collect()`, `.count()`, or `.exists()`.
 All entries (files **and** directories), recursive by default.
 
 ```rust
-use fs_ext::fsx::dir;
+use fs_ext::dir;
 
 let all = dir::entries("src").collect()?;
 ```
@@ -156,7 +156,7 @@ let all = dir::entries("src").collect()?;
 Only files, recursive by default.
 
 ```rust
-use fs_ext::fsx::dir;
+use fs_ext::dir;
 
 let rs_files = dir::files("src")
     .filter_extension("rs")

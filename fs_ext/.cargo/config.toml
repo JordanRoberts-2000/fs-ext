@@ -1,2 +1,2 @@
 [alias]
-xtest = "test --features tokio"
+testall = "test --features tokio"

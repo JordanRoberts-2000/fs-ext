@@ -1,5 +1,5 @@
 use {
-    crate::{CodecError, DeserializeError, SerializeError, fsx},
+    crate::{CodecError, DeserializeError, SerializeError, file},
     serde::{Serialize, de::DeserializeOwned},
     std::{io::Write, path::Path},
 };
@@ -18,7 +18,7 @@ pub trait Format {
         Self: Sized,
         T: serde::de::DeserializeOwned,
     {
-        let s = fsx::file::read_string(path)?;
+        let s = file::read_string(path)?;
         Self::parse_str(&s).map_err(CodecError::Deserialize)
     }
 
@@ -28,7 +28,7 @@ pub trait Format {
         T: Serialize,
     {
         let s = Self::to_string(value)?;
-        fsx::file::atomic::overwrite(path, |file| file.write_all(s.as_bytes()))?;
+        file::atomic::overwrite(path, |file| file.write_all(s.as_bytes()))?;
 
         Ok(())
     }

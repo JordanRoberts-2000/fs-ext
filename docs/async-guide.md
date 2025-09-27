@@ -3,9 +3,9 @@
 `fs_ext` allows easy switching between sync and async APIs:
 
 ```rust
-use fs_ext::{fsx, TempDir}; // sync
+use fs_ext::{TempDir}; // sync
 
-use fs_ext::tokio::{fsx, TempDir} // async
+use fs_ext::tokio::{TempDir} // async
 ```
 
 Async is not enabled by default—you must opt into it:
@@ -38,7 +38,7 @@ This crate follows the same approach as `tokio::fs` for consistency and reliabil
 ```rust
 // DON'T wrap an async API in spawn_blocking
 tokio::task::spawn_blocking(|| {
-    fs_ext::tokio::fsx::file::create_new(path)// This is already async!
+    fs_ext::tokio::file::create_new(path)// This is already async!
 }).await
 ```
 
@@ -54,7 +54,7 @@ Since Rust doesn't have async iterators, streaming operations work differently b
 #### Sync Streaming (Iterator-based)
 
 ```rust
-use {fs_ext::fsx::file, std::io};
+use {fs_ext::file, std::io};
 
 fn main() -> io::Result<()> {
     for line in file::stream_lines("playground/oof.txt")? {
@@ -68,7 +68,7 @@ fn main() -> io::Result<()> {
 #### Async Streaming (Custom Reader)
 
 ```rust
-use {fs_ext::tokio::fsx::file, std::io};
+use {fs_ext::tokio::file, std::io};
 
 #[tokio::main]
 async fn main() -> io::Result<()> {

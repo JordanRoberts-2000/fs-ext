@@ -1,4 +1,4 @@
-# 📄 `fsx::file` — File Utilities
+# 📄 `fs_ext::file` — File Utilities
 
 Utilities for validating, creating, opening, reading/writing, and atomically updating files.  
 Designed to give clear errors (with path context) and safe defaults (e.g., atomic writes).
@@ -74,7 +74,7 @@ Designed to give clear errors (with path context) and safe defaults (e.g., atomi
 Ensure the path exists and is a **regular file**.
 
 ```rust
-use fs_ext::fsx::file;
+use fs_ext::file;
 file::assert_exists("app.log")?;
 ```
 
@@ -85,7 +85,7 @@ file::assert_exists("app.log")?;
 Ensure no file exists at path.
 
 ```rust
-use fs_ext::fsx::file;
+use fs_ext::file;
 file::assert_not_exists("newfile.txt")?;
 ```
 
@@ -96,7 +96,7 @@ file::assert_not_exists("newfile.txt")?;
 Ensure the file exists and can be opened for reading.
 
 ```rust
-use fs_ext::fsx::file;
+use fs_ext::file;
 file::assert_readable("config.toml")?;
 ```
 
@@ -107,7 +107,7 @@ file::assert_readable("config.toml")?;
 Ensure the file can be opened for writing.
 
 ```rust
-use fs_ext::fsx::file;
+use fs_ext::file;
 file::assert_writable("output.bin")?;
 ```
 
@@ -118,7 +118,7 @@ file::assert_writable("output.bin")?;
 Return whether a path exists and is a **file**.
 
 ```rust
-use fs_ext::fsx::file;
+use fs_ext::file;
 if file::exists("CHANGELOG.md")? { /* ... */ }
 ```
 
@@ -129,7 +129,7 @@ if file::exists("CHANGELOG.md")? { /* ... */ }
 Return `true` if file length is 0.
 
 ```rust
-use fs_ext::fsx::file;
+use fs_ext::file;
 if file::is_empty("cache.dat")? { /* seed it */ }
 ```
 
@@ -140,7 +140,7 @@ if file::is_empty("cache.dat")? { /* seed it */ }
 Heuristic checks that attempt to open the file with the corresponding mode.
 
 ```rust
-use fs_ext::fsx::file;
+use fs_ext::file;
 let can_read = file::is_readable("notes.txt")?;
 let can_write = file::is_writable("notes.txt")?;
 ```
@@ -152,7 +152,7 @@ let can_write = file::is_writable("notes.txt")?;
 Return file length in bytes.
 
 ```rust
-use fs_ext::fsx::file;
+use fs_ext::file;
 let bytes = file::size("image.png")?;
 ```
 
@@ -165,7 +165,7 @@ let bytes = file::size("image.png")?;
 Create a **new** file; fails if it already exists.
 
 ```rust
-use fs_ext::fsx::file;
+use fs_ext::file;
 let f = file::create_new("fresh.txt")?;
 ```
 
@@ -176,7 +176,7 @@ let f = file::create_new("fresh.txt")?;
 If missing, create file and write content from a closure; otherwise leave as is.
 
 ```rust
-use fs_ext::fsx::file;
+use fs_ext::file;
 let _f = file::ensure_or_init_with("settings.json", || b"{\"first\":true}" as &[u8])?;
 ```
 
@@ -187,7 +187,7 @@ let _f = file::ensure_or_init_with("settings.json", || b"{\"first\":true}" as &[
 Same as above but with a static buffer.
 
 ```rust
-use fs_ext::fsx::file;
+use fs_ext::file;
 let _f = file::ensure_or_init("readme.txt", b"Hello\n")?;
 ```
 
@@ -198,7 +198,7 @@ let _f = file::ensure_or_init("readme.txt", b"Hello\n")?;
 Create if missing.
 
 ```rust
-use fs_ext::fsx::file;
+use fs_ext::file;
 let _f = file::ensure("db.sqlite3")?;
 ```
 
@@ -209,7 +209,7 @@ let _f = file::ensure("db.sqlite3")?;
 Open for write and truncate to zero. Returns `File`.
 
 ```rust
-use fs_ext::fsx::file;
+use fs_ext::file;
 use std::io::Write;
 let mut f = file::overwrite("output.log")?;
 writeln!(f, "fresh start")?;
@@ -222,7 +222,7 @@ writeln!(f, "fresh start")?;
 Create the file if missing; update mtime if it exists.
 
 ```rust
-use fs_ext::fsx::file;
+use fs_ext::file;
 file::touch("touch_me")?;
 ```
 
@@ -239,7 +239,7 @@ Deserialize from a path by inferring the format from extension.
 
 ```rust
 use serde::Deserialize;
-use fs_ext::fsx::file;
+use fs_ext::file;
 
 #[derive(Deserialize)]
 struct Cfg { name: String }
@@ -257,7 +257,7 @@ If the file is missing or empty, return `T::default()`; otherwise load.
 use serde::Deserialize;
 #[derive(Deserialize, Default)]
 struct Cfg { name: String }
-let cfg: Cfg = fs_ext::fsx::file::load_or_default("cfg.toml")?;
+let cfg: Cfg = fs_ext::file::load_or_default("cfg.toml")?;
 ```
 
 ---
@@ -267,7 +267,7 @@ let cfg: Cfg = fs_ext::fsx::file::load_or_default("cfg.toml")?;
 If missing, create by serializing the value returned from a closure; then load.
 
 ```rust
-let cfg = fs_ext::fsx::file::load_or_init_with("prefs.json", || serde_json::json!({"dark":true}))?;
+let cfg = fs_ext::file::load_or_init_with("prefs.json", || serde_json::json!({"dark":true}))?;
 ```
 
 ---
@@ -280,7 +280,7 @@ Like above but with a ready value.
 use serde::Serialize;
 #[derive(Serialize)]
 struct Pref { dark: bool }
-let cfg = fs_ext::fsx::file::load_or_init("prefs.json", Pref { dark: true })?;
+let cfg = fs_ext::file::load_or_init("prefs.json", Pref { dark: true })?;
 ```
 
 ---
@@ -290,7 +290,7 @@ let cfg = fs_ext::fsx::file::load_or_init("prefs.json", Pref { dark: true })?;
 If missing, write the provided string and then read it back (stringly).
 
 ```rust
-let s = fs_ext::fsx::file::load_or_write_str("notes.txt", "hello\n")?;
+let s = fs_ext::file::load_or_write_str("notes.txt", "hello\n")?;
 ```
 
 ---
@@ -315,7 +315,7 @@ struct Cfg { name: String }
 Return creation time.
 
 ```rust
-let t = fs_ext::fsx::file::meta::created("out.log")?;
+let t = fs_ext::file::meta::created("out.log")?;
 ```
 
 ---
@@ -325,7 +325,7 @@ let t = fs_ext::fsx::file::meta::created("out.log")?;
 Return a platform `FileType`.
 
 ```rust
-let ty = fs_ext::fsx::file::meta::file_type("archive.tar")?;
+let ty = fs_ext::file::meta::file_type("archive.tar")?;
 ```
 
 ---
@@ -335,7 +335,7 @@ let ty = fs_ext::fsx::file::meta::file_type("archive.tar")?;
 Return the last modified time.
 
 ```rust
-let t = fs_ext::fsx::file::meta::last_modified("data.csv")?;
+let t = fs_ext::file::meta::last_modified("data.csv")?;
 ```
 
 ---
@@ -347,7 +347,7 @@ let t = fs_ext::fsx::file::meta::last_modified("data.csv")?;
 Append to a file (fails if missing).
 
 ```rust
-use fs_ext::fsx::file;
+use fs_ext::file;
 file::append("app.log", b"additional content")?;
 ```
 
@@ -358,7 +358,7 @@ file::append("app.log", b"additional content")?;
 Open read/write without truncation (fails if missing).
 
 ```rust
-let f = fs_ext::fsx::file::open("db.sqlite3")?;
+let f = fs_ext::file::open("db.sqlite3")?;
 ```
 
 ---
@@ -370,7 +370,7 @@ let f = fs_ext::fsx::file::open("db.sqlite3")?;
 Read the entire file into `Vec<u8>`.
 
 ```rust
-let bytes = fs_ext::fsx::file::read_bytes("image.png")?;
+let bytes = fs_ext::file::read_bytes("image.png")?;
 ```
 
 ---
@@ -380,7 +380,7 @@ let bytes = fs_ext::fsx::file::read_bytes("image.png")?;
 Read an iterator over lines.
 
 ```rust
-for line in fs_ext::fsx::file::read_lines("README.md")? {
+for line in fs_ext::file::read_lines("README.md")? {
     let line = line?;
     // ...
 }
@@ -393,7 +393,7 @@ for line in fs_ext::fsx::file::read_lines("README.md")? {
 If missing, create by writing bytes from a closure, then read to `String`.
 
 ```rust
-let s = fs_ext::fsx::file::read_string_or_init_with("hello.txt", || "hi".as_bytes())?;
+let s = fs_ext::file::read_string_or_init_with("hello.txt", || "hi".as_bytes())?;
 ```
 
 ---
@@ -403,7 +403,7 @@ let s = fs_ext::fsx::file::read_string_or_init_with("hello.txt", || "hi".as_byte
 If missing, create by writing the given bytes, then read to `String`.
 
 ```rust
-let s = fs_ext::fsx::file::read_string_or_init("hello.txt", b"hi")?;
+let s = fs_ext::file::read_string_or_init("hello.txt", b"hi")?;
 ```
 
 ---
@@ -413,7 +413,7 @@ let s = fs_ext::fsx::file::read_string_or_init("hello.txt", b"hi")?;
 Read entire file into `String`.
 
 ```rust
-let s = fs_ext::fsx::file::read_string("Cargo.toml")?;
+let s = fs_ext::file::read_string("Cargo.toml")?;
 ```
 
 ---
@@ -427,7 +427,7 @@ Two ways to write typed data (both are **atomic**: temp file → replace):
 Pick the **format explicitly** via the `Format` trait.
 
 ```rust
-use fs_ext::{fsx::file, formats::Json};
+use fs_ext::{file, formats::Json};
 use serde::Serialize;
 
 #[derive(Serialize, Clone)]
@@ -443,7 +443,7 @@ file::save::<Cfg, Json>("settings.json", Cfg { name: "demo".into(), debug: true 
 Infer the **format from the extension** (`.json`, `.toml`, `.yaml/.yml`).
 
 ```rust
-use fs_ext::fsx::file;
+use fs_ext::file;
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -466,7 +466,7 @@ file::save_auto("config.toml", &cfg)?;  // → Toml
 Return a byte stream reader (e.g., `Read`/iterator) for incremental processing.
 
 ```rust
-let mut reader = fs_ext::fsx::file::stream_bytes("large.bin")?;
+let mut reader = fs_ext::file::stream_bytes("large.bin")?;
 ```
 
 ---
@@ -476,7 +476,7 @@ let mut reader = fs_ext::fsx::file::stream_bytes("large.bin")?;
 Return a line-streaming reader to process large text files lazily.
 
 ```rust
-let lines = fs_ext::fsx::file::stream_lines("access.log")?;
+let lines = fs_ext::file::stream_lines("access.log")?;
 for line in lines {
     let line = line?;
     // ...
@@ -495,7 +495,7 @@ Create a brand-new destination by writing via a temp file; fails if `dst` exists
 
 ```rust
 use std::io::Write;
-fs_ext::fsx::file::atomic::create_new("report.txt", |f| {
+fs_ext::file::atomic::create_new("report.txt", |f| {
     writeln!(f, "report v1")?;
     Ok(())
 })?;

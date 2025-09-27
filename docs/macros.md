@@ -1,7 +1,7 @@
 # 📦 Macros in `fs-ext`
 
 This crate provides several macros to simplify common filesystem operations.  
-They are thin wrappers around the sync API in `fsx::file` and `fsx::dir`, designed to reduce boilerplate when creating, loading, or saving files and directories.
+They are thin wrappers around the sync API in `fs_ext::file` and `fs_ext::dir`, designed to reduce boilerplate when creating, loading, or saving files and directories.
 
 ---
 

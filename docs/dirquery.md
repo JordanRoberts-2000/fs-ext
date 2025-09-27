@@ -18,12 +18,12 @@ let q = DirQuery::new("some/dir");
   - no depth or limit
   - no extension filters
 
-### Convenience constructors (`fsx::dir`)
+### Convenience constructors (`fs_ext::dir`)
 
-You can also create common queries directly via helpers in `fsx::dir`:
+You can also create common queries directly via helpers in `fs_ext::dir`:
 
 ```rust
-use fs_ext::fsx::dir;
+use fs_ext::dir;
 
 // Equivalent to DirQuery::new(path)
 let q1 = dir::entries("some/dir");
@@ -113,7 +113,7 @@ let rs_files = DirQuery::new("src")
 ### Limit to 10 entries
 
 ```rust
-let first_ten = fs_ext::fsx::dir::files("logs")
+let first_ten = fs_ext::dir::files("logs")
     .limit(10)
     .collect()?;
 ```
@@ -123,7 +123,7 @@ let first_ten = fs_ext::fsx::dir::files("logs")
 ### Check if any `.jpg` exists at top-level
 
 ```rust
-let has_jpg = fs_ext::fsx::dir::files("images")
+let has_jpg = fs_ext::dir::files("images")
     .recursive(false)
     .filter_extension("jpg")
     .exists()?;
@@ -134,7 +134,7 @@ let has_jpg = fs_ext::fsx::dir::files("images")
 ### Count nested directories up to depth 2
 
 ```rust
-let dir_count = fs_ext::fsx::dir::subdirs("workspace")
+let dir_count = fs_ext::dir::subdirs("workspace")
     .depth(2)
     .count()?;
 ```

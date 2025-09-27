@@ -34,8 +34,8 @@ fs-ext = "0.1"
 `fs-ext` provides both **sync** and **async** APIs with the same interface:
 
 ```rust
-use fs_ext::fsx;           // sync
-use fs_ext::tokio::fsx;    // async
+use fs_ext::file;           // sync
+use fs_ext::tokio::file;    // async
 ```
 
 Enable async with the `tokio` feature:
@@ -44,7 +44,7 @@ Enable async with the `tokio` feature:
 fs-ext = { version = "0.1", features = ["tokio"] }
 ```
 
-- Currently supports **Tokio** as the async runtime.
+- Currently only supports **Tokio**.
 - Async APIs mirror sync ones.
 - Streaming APIs differ slightly: sync uses iterators, async uses custom readers.
 
@@ -55,7 +55,7 @@ This makes it easy to switch between blocking and async contexts without changin
 ### Ensure directories & files
 
 ```rust
-use fs_ext::fsx::{dir, file};
+use fs_ext::{dir, file};
 
 dir::ensure("data/cache")?;
 file::ensure("data/cache/index.json")?;
@@ -66,7 +66,7 @@ file::ensure("data/cache/index.json")?;
 ### Write and read typed data
 
 ```rust
-use fs_ext::fsx::file;
+use fs_ext::file;
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize)]
@@ -90,7 +90,7 @@ let loaded: Config = file::load_auto("config.json")?;
 
 ```rust
 use std::io::Write;
-use fs_ext::fsx::file;
+use fs_ext::file;
 
 file::atomic::update("counter.txt", |current, f| {
     let n: u64 = current.trim().parse().unwrap_or(0);
@@ -104,7 +104,7 @@ file::atomic::update("counter.txt", |current, f| {
 ### Temp files and dirs
 
 ```rust
-use fs_ext::fsx::file;
+use fs_ext::file;
 
 let mut tmp = file::temp()?;              // auto-deletes on drop
 tmp.as_file_mut().write_all(b"scratch")?;
@@ -124,7 +124,7 @@ let rs_files = DirQuery::new("src")
     .collect()?;
 
 // Or use convenience
-let only_dirs = fs_ext::fsx::dir::subdirs("src").collect()?;
+let only_dirs = fs_ext::dir::subdirs("src").collect()?;
 ```
 
 ---

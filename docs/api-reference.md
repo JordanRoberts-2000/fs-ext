@@ -33,7 +33,7 @@ See: - [docs/dirquery](./dirquery.md)
 
 ---
 
-## 📁 Dir module — `fsx::dir`
+## 📁 Dir module — `fs_ext::dir`
 
 ### Checks
 
@@ -69,7 +69,7 @@ See: - [docs/dir](./dir.md)
 
 ---
 
-## 📄 File module — `fsx::file`
+## 📄 File module — `fs_ext::file`
 
 ### Checks
 
