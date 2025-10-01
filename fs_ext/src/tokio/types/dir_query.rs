@@ -1,5 +1,5 @@
 use {
-    crate::{DirQuery as SyncDirQuery, tokio::utils::join_err_to_io},
+    crate::{DirQuery as SyncDirQuery, ExtensionFilter, tokio::utils::join_err_to_io},
     std::{
         io,
         path::{Path, PathBuf},
@@ -41,35 +41,29 @@ impl DirQuery {
         self
     }
 
-    pub fn filter_extension(mut self, ext: impl AsRef<str>) -> Self {
+    pub fn extension_filter(mut self, filter: ExtensionFilter) -> Self {
         let inner = self.inner;
-        self.inner = inner.filter_extension(ext);
+        self.inner = inner.extension_filter(filter);
         self
     }
 
-    pub fn filter_extensions<I, S>(mut self, exts: I) -> Self
+    pub fn allow_extensions<I, S>(mut self, extensions: I) -> Self
     where
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
     {
         let inner = self.inner;
-        self.inner = inner.filter_extensions(exts);
+        self.inner = inner.allow_extensions(extensions);
         self
     }
 
-    pub fn exclude_extension(mut self, ext: impl AsRef<str>) -> Self {
-        let inner = self.inner;
-        self.inner = inner.exclude_extension(ext);
-        self
-    }
-
-    pub fn exclude_extensions<I, S>(mut self, exts: I) -> Self
+    pub fn deny_extensions<I, S>(mut self, extensions: I) -> Self
     where
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
     {
         let inner = self.inner;
-        self.inner = inner.exclude_extensions(exts);
+        self.inner = inner.deny_extensions(extensions);
         self
     }
 
@@ -132,15 +126,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_exists_false_when_no_matches() -> io::Result<()> {
+    async fn exists_false_when_no_matches_allow() -> io::Result<()> {
         let temp_dir = TempDir::new()?;
         let root = temp_dir.path();
 
-        // Create a file but filter it out
+        // Present file, but we only allow a non-existent extension
         fs::write(root.join("test.txt"), "content")?;
 
-        let exists = DirQuery::new(root).filter_extension("nonexistent").exists().await?;
-        assert!(!exists, "exists() should return false when no items match");
+        let exists = DirQuery::new(root).allow_extensions(["nonexistent"]).exists().await?;
+        assert!(!exists, "exists() should be false when no items match allowed extensions");
         Ok(())
     }
 
@@ -155,7 +149,7 @@ mod tests {
         let results = DirQuery::new(root)
             .include_files(true)
             .include_dirs(false)
-            .filter_extension("txt")
+            .allow_extensions(["txt"])
             .collect()
             .await?;
 

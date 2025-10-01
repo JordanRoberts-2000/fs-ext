@@ -1,9 +1,6 @@
 use {
-    crate::{DirQuery, utils::normalize_ext},
-    std::{
-        io,
-        path::{Path, PathBuf},
-    },
+    crate::DirQuery,
+    std::{io, path::PathBuf},
     walkdir::WalkDir,
 };
 
@@ -49,7 +46,7 @@ impl DirQuery {
             let should_include = if is_dir && self.include_dirs {
                 true
             } else if is_file && self.include_files {
-                self.matches_extension_filter(entry_path)
+                self.is_extension_allowed(entry_path)
             } else {
                 false
             };
@@ -68,37 +65,13 @@ impl DirQuery {
 
         Ok(results)
     }
-
-    fn matches_extension_filter(&self, path: &Path) -> bool {
-        let ext = path.extension().and_then(|e| e.to_str()).and_then(|e| normalize_ext(e));
-
-        match ext {
-            Some(ext) => {
-                // If there are allowed extensions, the file must have one of them
-                if !self.allow_exts.is_empty() && !self.allow_exts.contains(&ext) {
-                    return false;
-                }
-
-                // If there are denied extensions, the file must not have one of them
-                if !self.deny_exts.is_empty() && self.deny_exts.contains(&ext) {
-                    return false;
-                }
-
-                true
-            }
-            None => {
-                // Files without extensions are included only if no allow filter is set
-                self.allow_exts.is_empty() && self.deny_exts.is_empty()
-            }
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use {
         super::*,
-        std::{collections::BTreeSet, fs, io::Write},
+        std::{collections::BTreeSet, fs, io::Write, path::Path},
         tempfile::tempdir,
     };
 
@@ -180,6 +153,15 @@ mod tests {
     }
 
     #[test]
+    fn missing_root_produces_error() {
+        let d = tempdir().unwrap();
+        let missing = d.path().join("does_not_exist");
+        let err = DirQuery::new(&missing).collect().unwrap_err();
+        // Error text comes from walkdir mapping; check it mentions "walk error"
+        assert!(err.to_string().contains("walk error"), "expected mapped walk error, got: {err}");
+    }
+
+    #[test]
     fn allow_extensions_only_includes_allowed() -> io::Result<()> {
         let d = tempdir()?;
         let root = d.path();
@@ -187,9 +169,8 @@ mod tests {
         touch(&root.join("b.txt"));
         touch(&root.join("c.RS")); // case-insensitive after normalize_ext
 
-        let mut q = DirQuery::new(root).include_dirs(false).include_files(true);
-        // Insert directly to avoid depending on builder helpers in this file
-        q.allow_exts.insert("rs".into());
+        let q =
+            DirQuery::new(root).include_dirs(false).include_files(true).allow_extensions(["rs"]);
 
         let got = q.collect()?;
         assert_eq!(
@@ -207,24 +188,97 @@ mod tests {
         touch(&root.join("a.txt"));
         touch(&root.join("b.tmp"));
 
-        let mut q = DirQuery::new(root).include_dirs(false).include_files(true);
-        q.deny_exts.insert("tmp".into()); // normalized form
+        let q =
+            DirQuery::new(root).include_dirs(false).include_files(true).deny_extensions(["tmp"]);
 
         let got = q.collect()?;
         assert_eq!(
             as_set(got),
             as_set([root.join("a.txt")]),
-            "denied extensions should be excluded when allow is empty"
+            "denied extensions should be excluded"
         );
         Ok(())
     }
 
     #[test]
-    fn missing_root_produces_error() {
-        let d = tempdir().unwrap();
-        let missing = d.path().join("does_not_exist");
-        let err = DirQuery::new(&missing).collect().unwrap_err();
-        // Error text comes from walkdir mapping; check it mentions "walk error"
-        assert!(err.to_string().contains("walk error"), "expected mapped walk error, got: {err}");
+    fn no_extension_filter_includes_all_files() -> io::Result<()> {
+        let d = tempdir()?;
+        let root = d.path();
+        touch(&root.join("a.rs"));
+        touch(&root.join("b.txt"));
+        touch(&root.join("c.tmp"));
+
+        let q = DirQuery::new(root).include_dirs(false).include_files(true);
+
+        let got = q.collect()?;
+        assert_eq!(
+            as_set(got),
+            as_set([root.join("a.rs"), root.join("b.txt"), root.join("c.tmp")]),
+            "all files should be included when no filter is set"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn allow_extensions_excludes_files_without_extensions() -> io::Result<()> {
+        let d = tempdir()?;
+        let root = d.path();
+        touch(&root.join("main.rs"));
+        touch(&root.join("Makefile"));
+        touch(&root.join("README"));
+
+        let q =
+            DirQuery::new(root).include_dirs(false).include_files(true).allow_extensions(["rs"]);
+
+        let got = q.collect()?;
+        assert_eq!(
+            as_set(got),
+            as_set([root.join("main.rs")]),
+            "allow filter should exclude files without extensions"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn deny_extensions_includes_files_without_extensions() -> io::Result<()> {
+        let d = tempdir()?;
+        let root = d.path();
+        touch(&root.join("debug.log"));
+        touch(&root.join("Makefile"));
+        touch(&root.join("README"));
+
+        let q =
+            DirQuery::new(root).include_dirs(false).include_files(true).deny_extensions(["log"]);
+
+        let got = q.collect()?;
+        assert_eq!(
+            as_set(got),
+            as_set([root.join("Makefile"), root.join("README")]),
+            "deny filter should include files without extensions"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn extension_filter_with_multiple_extensions() -> io::Result<()> {
+        let d = tempdir()?;
+        let root = d.path();
+        touch(&root.join("main.rs"));
+        touch(&root.join("Cargo.toml"));
+        touch(&root.join("README.md"));
+        touch(&root.join("script.py"));
+
+        let q = DirQuery::new(root)
+            .include_dirs(false)
+            .include_files(true)
+            .allow_extensions(["rs", "toml", "md"]);
+
+        let got = q.collect()?;
+        assert_eq!(
+            as_set(got),
+            as_set([root.join("main.rs"), root.join("Cargo.toml"), root.join("README.md")]),
+            "multiple allowed extensions should all be included"
+        );
+        Ok(())
     }
 }

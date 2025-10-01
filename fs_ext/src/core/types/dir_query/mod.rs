@@ -1,5 +1,5 @@
-mod builder;
-mod executors;
-mod filters;
+mod core;
+mod extension_filter;
+mod impls;
 
-pub use builder::DirQuery;
+pub use {core::DirQuery, extension_filter::ExtensionFilter};
