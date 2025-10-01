@@ -1,5 +1,7 @@
 use {
-    crate::{DirQuery as SyncDirQuery, ExtensionFilter, tokio::utils::join_err_to_io},
+    crate::{
+        DirQuery as SyncDirQuery, DirQueryOptions, ExtensionFilter, tokio::utils::join_err_to_io,
+    },
     std::{
         io,
         path::{Path, PathBuf},
@@ -14,6 +16,10 @@ pub struct DirQuery {
 impl DirQuery {
     pub fn new(root: impl AsRef<Path>) -> Self {
         Self { inner: SyncDirQuery::new(root) }
+    }
+
+    pub fn from_options(path: impl AsRef<Path>, options: DirQueryOptions) -> Self {
+        Self { inner: SyncDirQuery::from_options(path, options) }
     }
 
     pub fn include_files(mut self, bool: bool) -> Self {

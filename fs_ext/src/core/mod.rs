@@ -2,4 +2,4 @@ pub mod dir;
 pub mod file;
 mod types;
 
-pub use types::{DirQuery, ExtensionFilter, TempDir, TempFile};
+pub use types::{DirQuery, DirQueryOptions, ExtensionFilter, TempDir, TempFile};

@@ -1,5 +1,5 @@
 use {
-    crate::ExtensionFilter,
+    crate::{DirQueryOptions, ExtensionFilter},
     std::path::{Path, PathBuf},
 };
 
@@ -24,6 +24,18 @@ impl DirQuery {
             limit: None,
             depth: None,
             extension_filter: None,
+        }
+    }
+
+    pub fn from_options(path: impl AsRef<Path>, options: DirQueryOptions) -> Self {
+        Self {
+            root: path.as_ref().to_path_buf(),
+            include_files: options.include_files,
+            include_dirs: options.include_dirs,
+            recursive: options.recursive,
+            limit: options.limit,
+            depth: options.depth,
+            extension_filter: options.extension_filter,
         }
     }
 }
