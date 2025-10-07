@@ -1,9 +1,7 @@
 mod dir_query;
-mod temp_dir;
-mod temp_file;
+mod temp;
 
 pub use {
     dir_query::{DirQuery, DirQueryOptions, ExtensionFilter},
-    temp_dir::TempDir,
-    temp_file::TempFile,
+    temp::{TempDir, TempFile},
 };
