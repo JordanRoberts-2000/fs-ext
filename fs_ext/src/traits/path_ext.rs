@@ -14,6 +14,7 @@ pub trait PathExt {
     fn assert_file(&self) -> io::Result<()>;
     fn parent_or_current(&self) -> PathBuf;
     fn utf8_stem(&self) -> io::Result<&str>;
+    fn utf8_extension(&self) -> io::Result<Option<&str>>;
 }
 
 impl PathExt for Path {
@@ -72,6 +73,18 @@ impl PathExt for Path {
         self.file_stem()
             .and_then(|s| s.to_str())
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "no UTF-8 file stem"))
+    }
+
+    fn utf8_extension(&self) -> io::Result<Option<&str>> {
+        match self.extension() {
+            None => Ok(None),
+            Some(ext) => ext.to_str().map(Some).ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("non-UTF-8 extension in '{}'", self.display()),
+                )
+            }),
+        }
     }
 }
 
@@ -169,5 +182,45 @@ mod tests {
         let p = Path::new(OsStr::from_bytes(raw));
         let err = p.utf8_stem().unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+    }
+
+    // ---------- utf8_extension (&str) ----------
+
+    #[test]
+    fn utf8_extension_basic() -> io::Result<()> {
+        let p = Path::new("image.jpeg");
+        assert_eq!(p.utf8_extension()?, Some("jpeg"));
+        Ok(())
+    }
+
+    #[test]
+    fn utf8_extension_uppercase_preserved() -> io::Result<()> {
+        let p = Path::new("photo.JPG");
+        assert_eq!(p.utf8_extension()?, Some("JPG"));
+        Ok(())
+    }
+
+    #[test]
+    fn utf8_extension_multi_dot_last_component_only() -> io::Result<()> {
+        let p = Path::new("archive.tar.gz");
+        assert_eq!(p.utf8_extension()?, Some("gz"));
+        Ok(())
+    }
+
+    #[test]
+    fn utf8_extension_none_when_no_dot_or_dotfile() -> io::Result<()> {
+        assert_eq!(Path::new("README").utf8_extension()?, None);
+        assert_eq!(Path::new(".gitignore").utf8_extension()?, None);
+        assert_eq!(Path::new(".env").utf8_extension()?, None);
+        Ok(())
+    }
+
+    #[test]
+    fn utf8_extension_unicode_ok() -> io::Result<()> {
+        let p = Path::new("файл.png");
+        assert_eq!(p.utf8_extension()?, Some("png"));
+        let p = Path::new("emoji📄.txt");
+        assert_eq!(p.utf8_extension()?, Some("txt"));
+        Ok(())
     }
 }
