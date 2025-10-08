@@ -7,4 +7,4 @@ pub mod formats {
 mod path_kind;
 mod write_options;
 
-pub use path_kind::PathKind;
+pub use {path_kind::PathKind, write_options::*};

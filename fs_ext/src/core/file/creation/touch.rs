@@ -13,7 +13,7 @@ pub fn touch(path: impl AsRef<Path>) -> io::Result<File> {
     _touch(path.as_ref())
 }
 
-fn _touch(path: &Path) -> io::Result<std::fs::File> {
+fn _touch(path: &Path) -> io::Result<File> {
     let file = OpenOptions::new().write(true).create(true).open(path).map_err(|e| {
         io::Error::new(
             e.kind(),

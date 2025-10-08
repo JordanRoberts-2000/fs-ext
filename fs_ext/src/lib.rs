@@ -15,5 +15,5 @@ pub use {
     core::*,
     error::{CodecError, DeserializeError, SerializeError},
     traits::{Format, IoResultExt, PathExt},
-    types::{PathKind, formats},
+    types::{CollisionStrategy, ParentPolicy, PathKind, RenameOptions, WriteOptions, formats},
 };
