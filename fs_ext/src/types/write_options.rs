@@ -8,7 +8,7 @@ use {
     uuid::Uuid,
 };
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug, PartialEq, Copy, Eq)]
 pub struct WriteOptions {
     pub parent: ParentPolicy,
     pub collision: CollisionStrategy,
@@ -20,7 +20,7 @@ impl AsRef<WriteOptions> for WriteOptions {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug, PartialEq, Copy, Eq)]
 pub enum ParentPolicy {
     #[default]
     RequireExists,
@@ -49,7 +49,7 @@ impl ParentPolicy {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug, PartialEq, Copy, Eq)]
 pub enum CollisionStrategy {
     #[default]
     Error,
@@ -58,7 +58,7 @@ pub enum CollisionStrategy {
     Skip,
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug, PartialEq, Copy, Eq)]
 pub enum RenameOptions {
     Timestamp,
     Uuid,
